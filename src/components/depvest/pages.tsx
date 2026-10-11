@@ -227,40 +227,50 @@ export function FAQ({ terms, onSupport }: { terms: Terms; onSupport: () => void 
   const [q, setQ] = useState("");
   const productFaqs = [
     {
+      category: "Account & access",
       q: "How do I connect a wallet?",
       a: "Wallet connection is not currently available in this interface. Never send assets to an address unless it is provided by a verified, official product flow.",
     },
     {
+      category: "Deposits & withdrawals",
       q: "Do dashboard deposits and withdrawals submit transactions?",
       a: "No. The deposit, withdrawal, and ledger controls currently update the dashboard interface only; they do not submit or confirm blockchain transactions.",
     },
     {
+      category: "Strategies & yield",
       q: "Are the configured rates guaranteed?",
       a: "No. Rates are variable, may change, and are not a promise of future returns. Investment value can fall, including to zero.",
     },
     {
+      category: "Fees & eligibility",
       q: "What fees are listed?",
       a: `Configured fee schedule — deposit: ${terms.fees.deposit ?? "not configured"}; withdrawal: ${terms.fees.withdrawal ?? "not configured"}; performance: ${terms.fees.performance ?? "not configured"}; rebalance: ${terms.fees.rebalance ?? "not configured"}. Review the official terms for applicability and conditions.`,
     },
     {
+      category: "Custody & support",
       q: "How can I contact support?",
       a: "Support contact details are not published in this interface. Never share passwords, private keys, or seed phrases with anyone claiming to be support.",
     },
   ];
   const entries = terms.faqs.length ? terms.faqs : productFaqs;
-  const list = entries.filter((f) => (f.q + f.a).toLowerCase().includes(q.trim().toLowerCase()));
+  const list = entries.filter((f) =>
+    (f.category + f.q + f.a).toLowerCase().includes(q.trim().toLowerCase()),
+  );
+  const groupedEntries = list.reduce<Array<{ category: string; faqs: typeof list }>>(
+    (groups, faq) => {
+      const group = groups.find((item) => item.category === faq.category);
+      if (group) group.faqs.push(faq);
+      else groups.push({ category: faq.category, faqs: [faq] });
+      return groups;
+    },
+    [],
+  );
   return (
     <section>
       <Intro
         eyebrow="Questions & Answers"
-        title={
-          terms.faqs.length ? "Answers from the official terms." : "Frequently asked questions."
-        }
-        copy={
-          terms.faqs.length
-            ? "Search answers published in the configured product terms."
-            : "Find answers about account access, strategy rates, fees, and using the DepVest dashboard."
-        }
+        title="Frequently asked questions."
+        copy="Search answers about DepVest’s configured strategies, fees, task rules, and dashboard. This information does not replace verified product or legal terms."
       />
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div>
@@ -291,13 +301,20 @@ export function FAQ({ terms, onSupport }: { terms: Terms; onSupport: () => void 
             collapsible
             className="rounded-[14px] border border-border bg-card px-5"
           >
-            {list.map((f) => (
-              <AccordionItem key={f.q} value={f.q} className="border-border">
-                <AccordionTrigger className="text-left text-sm">{f.q}</AccordionTrigger>
-                <AccordionContent className="text-xs leading-relaxed text-muted-foreground">
-                  {f.a}
-                </AccordionContent>
-              </AccordionItem>
+            {groupedEntries.map(({ category, faqs }) => (
+              <div key={category}>
+                <div className="pb-2 pt-5 first:pt-0">
+                  <Eyebrow>{category}</Eyebrow>
+                </div>
+                {faqs.map((f) => (
+                  <AccordionItem key={f.q} value={f.q} className="border-border">
+                    <AccordionTrigger className="text-left text-sm">{f.q}</AccordionTrigger>
+                    <AccordionContent className="text-xs leading-relaxed text-muted-foreground">
+                      {f.a}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </div>
             ))}
             {list.length === 0 && (
               <p className="py-6 text-center text-xs text-muted-foreground">
@@ -312,7 +329,8 @@ export function FAQ({ terms, onSupport }: { terms: Terms; onSupport: () => void 
           </span>
           <p className="mt-5 text-sm font-semibold">Still have questions?</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Official support channels and contact details are listed on the Support page.
+            Support contact details have not been configured. See the Support page for current
+            information.
           </p>
           <Button className="mt-5 w-full rounded-full" onClick={onSupport}>
             Open Support
