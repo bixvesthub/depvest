@@ -173,7 +173,7 @@ const vaults: Array<{
   },
   {
     name: "AI Task Work",
-    rate: "$0.25 – $0.45",
+    rate: "$0.10 – $0.30",
     rateLabel: "/ task",
     risk: "No capital required",
     detail: "Direct micro-payouts for dataset validation",
@@ -191,6 +191,7 @@ const vaults: Array<{
 ];
 
 const activity: ActivityRow[] = [];
+const TASK_SESSION_LIMIT = 5;
 
 function DepVestApp() {
   const [view, setView] = useState<View>("Portfolio");
@@ -199,6 +200,8 @@ function DepVestApp() {
   const [cash, setCash] = useState(0);
   const [earned, setEarned] = useState(0);
   const [tasksDone, setTasksDone] = useState(0);
+  const [tasksStarted, setTasksStarted] = useState(0);
+  const [startedTaskTitles, setStartedTaskTitles] = useState<string[]>([]);
   const [alloc, setAlloc] = useState<Alloc>({ Cash: 0, Cloud: 0, Digital: 0, Task: 0 })
   const [terms, setTerms] = useState<Terms>(DEFAULT_TERMS);
   const [ledger, setLedger] = useState<typeof activity>([]);
@@ -266,7 +269,19 @@ function DepVestApp() {
     if (a === "Waitlist") return showNotice("Waitlist joined — DePIN vaults coming soon");
     if (a === "Quick Earn") { showNotice("Quick Earn queue opened"); return go("Active Earn"); }
     if (a === "Export ledger") { exportLedgerCsv(allRows()); return showNotice("Ledger exported as CSV"); }
-    if (a.startsWith("Task|")) { const [, title, reward] = a.split("|"); return requireWallet({ kind: "task", title: title ?? "Task", reward: Number(reward) }); }
+    if (a.startsWith("Task|")) {
+      if (tasksStarted >= TASK_SESSION_LIMIT) {
+        showNotice("Task limit reached for this session.");
+        return;
+      }
+      const [, title, reward] = a.split("|");
+      if (!title || !reward || startedTaskTitles.includes(title)) return;
+      const taskFlow = { kind: "task" as const, title, reward: Number(reward) };
+      if (!wallet) return requireWallet(taskFlow);
+      setTasksStarted((current) => current + 1);
+      setStartedTaskTitles((current) => [...current, title]);
+      return setFlow(taskFlow);
+    }
     if (a.startsWith("Invest in ")) return setFlow({ kind: "vault", name: a.slice(10) });
     if (a.startsWith("Start Earning")) return go("Active Earn");
     const name = a.split(": ")[1];
@@ -287,9 +302,9 @@ function DepVestApp() {
         onNotice={showNotice}
       />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
-        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} alloc={alloc} total={cash} idleCash={idleCash} showIdleBanner={cashIsUnallocated} rows={allRows()} />}
+        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={cash} idleCash={idleCash} showIdleBanner={cashIsUnallocated} rows={allRows()} />}
         {view === "Invest" && <Invest onAction={setAction} terms={terms} />}
-        {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={earned} done={tasksDone} />}
+        {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={earned} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
         {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
         {view === "Invite Friends" && <InviteFriends onNotice={showNotice} />}
         {view === "How It Works" && <HowItWorks terms={terms} onStart={() => go("Invest")} />}
@@ -341,7 +356,7 @@ function DepVestApp() {
         settleEntry(id, () => {}, `Task payout of ${fmt(reward)} confirmed`);
       }} />
       <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc)).find((v) => v.name === flow.name) ?? null) : null} onClose={() => setFlow(null)} onNotice={showNotice} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
-      <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => { setWallet(w); setConnectOpen(false); const requestedFlow = pendingFlow; setPendingFlow(null); if (requestedFlow) setFlow(requestedFlow); showNotice(`${WALLET_ADDRESS} connected on Base network`); }} />
+      <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => { setWallet(w); setConnectOpen(false); const requestedFlow = pendingFlow; setPendingFlow(null); if (requestedFlow?.kind === "task") { setTasksStarted((current) => current + 1); setStartedTaskTitles((current) => [...current, requestedFlow.title]); } if (requestedFlow) setFlow(requestedFlow); showNotice(`${WALLET_ADDRESS} connected on Base network`); }} />
       <ProfileSheet
         open={profileOpen}
         onOpenChange={setProfileOpen}
@@ -421,7 +436,7 @@ function NavButton({ item, active, onClick }: { item: (typeof navItems)[number];
   return <button onClick={onClick} className={cn("flex h-8 items-center gap-2 rounded-full px-4 text-xs transition-colors", active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}><Icon className="size-3.5" />{item.label}</button>;
 }
 
-function Portfolio({ terms, onAction, onNotice, onView, alloc, total, idleCash, showIdleBanner, rows }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; alloc: Alloc; total: number; idleCash: number; showIdleBanner: boolean; rows: typeof activity; terms: Terms }) {
+function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total, idleCash, showIdleBanner, rows }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; alloc: Alloc; total: number; idleCash: number; showIdleBanner: boolean; rows: typeof activity; terms: Terms }) {
   return (
     <>
       <PortfolioSummary onAction={onAction} alloc={alloc} total={total} />
@@ -448,7 +463,7 @@ function Portfolio({ terms, onAction, onNotice, onView, alloc, total, idleCash, 
           </div>
         </section>
         <aside className="space-y-4 lg:sticky lg:top-24">
-          <Performance onAction={onAction} rows={rows} />
+          <Performance onAction={onAction} onView={onView} onReceipt={onReceipt} rows={rows} terms={terms} alloc={alloc} balance={total} />
           <div className="flex items-start gap-3 rounded-md border border-border bg-card p-5">
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary"><ShieldCheck className="size-4 text-muted-foreground" /></span>
             <div><p className="text-xs font-medium">Institutional-grade custody</p><p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Custody and audit details will be published with the official product terms.</p></div>
@@ -530,27 +545,98 @@ function VaultCard({ vault, onAction, onNotice, idleCash }: { vault: (typeof vau
   );
 }
 
-function Performance({ onAction, rows }: { onAction: (v: string) => void; rows: typeof activity }) {
-  const [range, setRange] = useState("1M");
+function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance }: { onAction: (v: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; rows: typeof activity; terms: Terms; alloc: Alloc; balance: number }) {
+  const [tab, setTab] = useState<"performance" | "activity">("performance");
+  const [range, setRange] = useState<"1W" | "1M" | "3M" | "1Y" | "ALL">("1M");
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const ranges = { "1W": 7, "1M": 30, "3M": 90, "1Y": 365, ALL: 1825 } as const;
+  const weights = alloc.Cash + alloc.Cloud + alloc.Digital;
+  const hasAllocation = weights > 0;
+  const illustrativeWeights = { Cash: 40, Cloud: 35, Digital: 25 };
+  const blendedRate = (["Cash", "Cloud", "Digital"] as const).reduce((sum, key) => {
+    const weight = hasAllocation ? alloc[key] : illustrativeWeights[key];
+    return sum + weight * (terms.apy[key] ?? 0);
+  }, 0) / (hasAllocation ? 100 : 100);
+  const missingActiveRate = (["Cash", "Cloud", "Digital"] as const).some((key) => alloc[key] > 0 && terms.apy[key] == null);
+  const effectiveRate = hasAllocation ? blendedRate : 0;
+  const dailyAccrual = missingActiveRate ? null : balance * (Math.pow(1 + effectiveRate / 100, 1 / 365) - 1);
+  const annualReturn = missingActiveRate ? null : balance * (Math.pow(1 + effectiveRate / 100, 365 / 365) - 1);
+  const rangeDays = ranges[range];
+  const now = Date.now();
+  const isProjection = balance === 0;
+  const chartRate = hasAllocation ? blendedRate : 7.4;
+  const chartPrincipal = isProjection ? 1000 : balance / Math.pow(1 + Math.max(0, blendedRate) / 100, rangeDays / 365);
+  const points = Array.from({ length: 33 }, (_, index) => {
+    const progress = index / 32;
+    const elapsedDays = rangeDays * progress;
+    const direction = isProjection ? 1 : progress - 1;
+    const date = new Date(now + direction * elapsedDays * 24 * 60 * 60 * 1000);
+    const nav = chartPrincipal * Math.pow(1 + Math.max(0, chartRate) / 100, elapsedDays / 365);
+    return { date, nav, yield: nav - chartPrincipal };
+  });
+  const minNav = Math.min(...points.map((point) => point.nav));
+  const maxNav = Math.max(...points.map((point) => point.nav));
+  const spread = Math.max(maxNav - minNav, chartPrincipal * 0.001, 0.01);
+  const chartPoints = points.map((point, index) => ({
+    ...point,
+    x: 28 + (index / (points.length - 1)) * 464,
+    y: 178 - ((point.nav - minNav) / spread) * 130,
+  }));
+  const selected = hoveredIndex == null ? null : chartPoints[hoveredIndex];
+  const line = chartPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const area = `${line} L 492 190 L 28 190 Z`;
+  const formatDate = (date: Date) => date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: range === "ALL" ? "2-digit" : undefined });
+  const formatMoney = (amount: number) => `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   return (
-    <section className="rounded-[14px] border border-border bg-card p-5 shadow-card md:p-6">
-      <SectionLabel title="Performance & Activity" right={`${range} view`} />
-      <div className="inline-flex rounded-full border border-border bg-background/40 p-1">{["1W", "1M", "3M", "1Y", "ALL"].map((item) => <button key={item} onClick={() => setRange(item)} className={cn("grid h-7 min-w-9 place-items-center rounded-full px-2 font-mono text-[9px]", range === item ? "bg-foreground text-background" : "text-muted-foreground")}>{item}</button>)}</div>
-      <div className="mt-6 h-[220px] w-full text-success">
-        <svg viewBox="0 0 520 220" className="h-full w-full" preserveAspectRatio="none" aria-label="Portfolio performance chart">
-          <defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity=".25"/><stop offset="1" stopColor="currentColor" stopOpacity="0"/></linearGradient></defs>
-          <path d="M14 182 C60 140 88 148 126 130 S180 95 224 91 S275 87 310 68 S370 53 404 52 L404 192 L14 192 Z" fill="url(#chart-fill)" />
-          <path d="M14 182 C60 140 88 148 126 130 S180 95 224 91 S275 87 310 68 S370 53 404 52" fill="none" stroke="currentColor" strokeWidth="3" />
-          <path d="M404 52 C448 43 474 35 508 28" fill="none" stroke="currentColor" strokeOpacity=".65" strokeWidth="2" strokeDasharray="6 5" />
-        </svg>
+    <section className="overflow-hidden rounded-[14px] border border-border bg-card shadow-card">
+      <div className="flex items-center gap-1 border-b border-border p-3">
+        <button aria-pressed={tab === "performance"} onClick={() => setTab("performance")} className={cn("flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-xs font-medium transition-colors", tab === "performance" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-secondary")}><BarChart3 className="size-3.5" />Performance</button>
+        <button aria-pressed={tab === "activity"} onClick={() => setTab("activity")} className={cn("flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-xs font-medium transition-colors", tab === "activity" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-secondary")}><Activity className="size-3.5" />Live Activity</button>
       </div>
-      <div className="flex justify-between font-mono text-[9px] text-muted-foreground"><span>Oct 24</span><span className="flex gap-4"><i className="text-success">— Actual</i><i>— Projected</i></span><span>Now</span></div>
-      <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1"><Metric label="Total Gain" value="$0.00" note="No history yet" /><Metric label="APY Weighted" value="—" note="Needs verified rates" /><Metric label="Projected 1Y" value="$0.00" note="Deposit to start" /></div>
-      <button onClick={() => onAction("Calculator")} className="mt-4 flex w-full items-center gap-3 rounded-md border border-success/25 bg-success/10 p-3 text-left"><Sparkles className="size-4 shrink-0 text-success" /><span className="min-w-0 flex-1 text-[11px]"><b className="block font-mono text-[9px] tracking-[0.16em] text-muted-foreground">SIMULATOR</b>Project returns once rates are verified</span><span className="shrink-0 text-[11px] text-success">Open calculator</span></button>
-      <div className="my-6 border-t border-border" />
-      <SectionLabel title="Recent Activity Feed" right={`${rows.length} items`} />
-      <div className="space-y-2">{rows.length === 0 && <p className="rounded-md border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground">No activity yet. Your deposits, payouts and tasks will appear here.</p>}{rows.slice(0, 5).map((item, i) => { const Icon = item.icon; return <div key={item.title + i} className="flex items-center gap-3 rounded-md border border-border bg-background/30 p-3"><span className={cn("vault-icon size-8", `accent-${item.accent}`)}><Icon className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-medium">{item.title} <span className="font-mono text-success">{item.value}</span></p><p className="mt-1 truncate text-[9px] text-muted-foreground">{item.meta}</p></div><Check className="size-3 text-muted-foreground" /></div>; })}</div>
-      <div className="mt-5 flex justify-between border-t border-border pt-4 font-mono text-[9px] text-muted-foreground"><span>On-chain audit</span><span className="text-success">● Live</span></div>
+      {tab === "performance" ? <div className="p-4 md:p-5">
+        <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold">Portfolio performance</h2><p className="mt-1 text-[10px] text-muted-foreground">{isProjection ? `Projected Growth at ${chartRate.toFixed(2)}% Blended APY` : "Estimated growth · yield simulated at current blended APY"}</p></div><span className="rounded-full border border-border bg-secondary/60 px-2 py-1 font-mono text-[9px] text-muted-foreground">{range}</span></div>
+        <div className="mb-3 flex justify-end gap-1">{(Object.keys(ranges) as Array<keyof typeof ranges>).map((item) => <button key={item} aria-pressed={range === item} onClick={() => { setRange(item); setHoveredIndex(null); }} className={cn("min-w-8 rounded-full px-2 py-1.5 font-mono text-[9px] transition-colors", range === item ? "bg-success/15 text-success" : "text-muted-foreground hover:bg-secondary")}>{item}</button>)}</div>
+        <div className="relative">
+          {selected && <div className="pointer-events-none absolute left-1/2 top-1 z-10 -translate-x-1/2 rounded-md border border-border bg-popover/95 px-3 py-2 text-[10px] shadow-panel sm:left-auto sm:right-2 sm:translate-x-0">
+            <p className="mb-1 font-medium">{formatDate(selected.date)}</p><p className="flex justify-between gap-4"><span className="text-muted-foreground">Portfolio NAV</span><b className="font-mono">{formatMoney(selected.nav)}</b></p><p className="mt-1 flex justify-between gap-4"><span className="text-muted-foreground">Cumulative simulated yield</span><b className="font-mono text-success">{formatMoney(selected.yield)}</b></p>
+          </div>}
+          <svg viewBox="0 0 520 210" className="h-[174px] w-full overflow-visible text-success sm:h-[190px]" preserveAspectRatio="none" role="slider" aria-label={`${range} portfolio ${isProjection ? "projected" : "estimated"} performance chart`} aria-valuemin={0} aria-valuemax={32} aria-valuenow={hoveredIndex ?? 32} aria-valuetext={selected ? `${formatDate(selected.date)}, portfolio NAV ${formatMoney(selected.nav)}, cumulative simulated yield ${formatMoney(selected.yield)}` : "Hover or use arrow keys to inspect the chart"} tabIndex={0} onMouseLeave={() => setHoveredIndex(null)} onMouseMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setHoveredIndex(Math.max(0, Math.min(32, Math.round(((event.clientX - rect.left) / rect.width) * 32))));
+          }} onFocus={() => setHoveredIndex((index) => index ?? 32)} onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            setHoveredIndex((index) => Math.max(0, Math.min(32, (index ?? 32) + (event.key === "ArrowRight" ? 1 : -1))));
+          }}>
+            <defs><linearGradient id="performance-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity=".24" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs>
+            {[58, 100, 142, 184].map((y) => <line key={y} x1="28" y1={y} x2="492" y2={y} stroke="currentColor" strokeOpacity=".1" strokeDasharray="3 5" />)}
+            <path d={area} fill="url(#performance-fill)" />
+            <path d={line} fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray={isProjection ? "7 5" : undefined} vectorEffect="non-scaling-stroke" />
+            {selected && <><line x1={selected.x} y1="30" x2={selected.x} y2="190" stroke="currentColor" strokeOpacity=".4" strokeDasharray="3 4" /><circle cx={selected.x} cy={selected.y} r="5" fill="currentColor" stroke="var(--card)" strokeWidth="2" /></>}
+            <rect x="28" y="20" width="464" height="175" fill="transparent" />
+          </svg>
+        </div>
+        <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground"><span>{formatDate(chartPoints[0].date)}</span><span className="flex items-center gap-2"><i className="text-success">{isProjection ? "– Projection" : "– Estimated"}</i><i>{isProjection ? "$1,000 illustration · not invested" : "– Simulated yield"}</i></span><span>{formatDate(chartPoints[32].date)}</span></div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <Metric label={hasAllocation ? "Blended net APY" : "Illustrative APY"} value={missingActiveRate ? "Unconfigured" : `${(hasAllocation ? blendedRate : chartRate).toFixed(2)}%`} note={hasAllocation ? `${alloc.Cash}% cash · ${alloc.Cloud}% cloud · ${alloc.Digital}% digital` : "Example 40/35/25 vault mix"} success />
+          <Metric label="Daily run-rate" value={dailyAccrual == null ? "Unconfigured" : `+${formatMoney(dailyAccrual)}`} note="/ day · at current balance" success />
+          <Metric label="1Y projected return" value={annualReturn == null ? "Unconfigured" : `+${formatMoney(annualReturn)}`} note="/ yr · compounded estimate" success />
+        </div>
+        <p className="mt-3 text-[9px] leading-relaxed text-muted-foreground">Illustrative simulation, not verified performance or a guarantee. Actual returns depend on deployed balances and live rates.</p>
+        <button onClick={() => onAction("Calculator")} className="mt-3 flex w-full items-center justify-between gap-2 rounded-md border border-success/25 bg-success/10 p-3 text-left text-[11px]"><span className="flex min-w-0 items-center gap-2"><Sparkles className="size-4 shrink-0 text-success" /><span className="truncate">Compare blended strategy projections</span></span><span className="shrink-0 text-success">Calculator →</span></button>
+      </div> : <div className="p-4 md:p-5">
+        <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold">Live Activity</h2><p className="mt-1 text-[10px] text-muted-foreground">{rows.length} {rows.length === 1 ? "transaction" : "transactions"} · latest first</p></div><span className="flex items-center gap-1.5 text-[9px] text-success"><i className="size-1.5 animate-pulse rounded-full bg-success" />Updated live</span></div>
+        <div className="space-y-2">{rows.length === 0 ? <p className="rounded-md border border-dashed border-border p-5 text-center text-[11px] text-muted-foreground">No activity yet. Deposits, payouts and tasks will appear here.</p> : rows.slice(0, 5).map((item) => {
+          const Icon = item.icon;
+          const statusLabel = item.status === "pending" ? "Clearing" : item.status === "completed" ? "Settled" : "Failed";
+          return <button key={item.id} onClick={() => onReceipt(item)} className="flex w-full items-center gap-3 rounded-md border border-border bg-background/30 p-3 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span className={cn("vault-icon size-8 shrink-0", `accent-${item.accent}`)}><Icon className="size-4" /></span>
+            <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-[11px] font-medium">{item.title}</span><span className={cn("shrink-0 font-mono text-[10px]", item.value.startsWith("-") ? "text-muted-foreground" : "text-success")}>{item.value}</span></span><span className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-[9px] text-muted-foreground">{item.meta}</span><span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[9px]", item.status === "pending" ? "bg-warning/15 text-warning" : item.status === "completed" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>{statusLabel}</span></span></span>
+          </button>;
+        })}</div>
+        <button onClick={() => onView("Wallet & Ledger")} className="mt-4 w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-left text-[10px] font-medium text-success transition-colors hover:bg-secondary">View full ledger ({rows.length} {rows.length === 1 ? "transaction" : "transactions"}) →</button>
+      </div>}
     </section>
   );
 }
@@ -561,10 +647,113 @@ function Invest({ onAction, terms }: { onAction: (value: string) => void; terms:
   return <section><PageIntro eyebrow="Vault Marketplace" title="Put every dollar to work." copy="Compare verified yield strategies across cash, compute, and digital assets." /><div className="mb-6 flex items-center gap-3 rounded-md border border-border bg-card px-4"><Search className="size-4 text-muted-foreground"/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search vaults" className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" /></div><div className="grid gap-4 md:grid-cols-2">{visible.map((vault) => <article key={vault.name} className="rounded-[14px] border border-border bg-card p-6"><div className="flex justify-between"><span className={cn("vault-icon", `accent-${vault.accent}`)}><vault.icon className="size-5" /></span><Badge accent={vault.accent}>{vault.risk}</Badge></div><h2 className="mt-6 text-lg font-semibold">{vault.name}</h2><p className="mt-2 text-xs text-muted-foreground">{vault.detail}</p><p className="mt-7 font-mono text-3xl">{vault.rate} <span className="text-xs text-muted-foreground">{vault.rateLabel}</span></p><div className="mt-6 flex items-center justify-between border-t border-border pt-5"><span className="text-[10px] text-muted-foreground">{vault.terms}</span><Button size="sm" className="rounded-full" onClick={() => onAction(`Invest in ${vault.name}`)}>Explore <ArrowUpRight /></Button></div></article>)}</div></section>;
 }
 
-function ActiveEarn({ onAction, earned, done, terms }: { onAction: (value: string) => void; earned: number; done: number; terms: Terms }) {
-  const r = terms.taskReward;
-  const tasks = [{ title: "Validate product labels", time: "~3 min", icon: Bot }, { title: "Review AI summary", time: "~4 min", icon: Sparkles }, { title: "Classify satellite tiles", time: "~2 min", icon: Layers3 }].map((t) => ({ ...t, reward: r ? `$${r.min.toFixed(2)}` : "Unconfigured" }));
-  return <section><PageIntro eyebrow="Active Earn" title="Earn in the moments between." copy={`Zero capital risk · ${rewardRange(r)} per verified task · Payout in USDC`} /><div className="grid gap-5 lg:grid-cols-[1fr_320px]"><div className="space-y-3">{tasks.map(({ title, reward, time, icon: Icon }) => <article key={title} className="flex flex-wrap items-center gap-3 rounded-[14px] border border-border bg-card p-4 sm:flex-nowrap sm:gap-4 sm:p-5"><span className="vault-icon accent-task shrink-0"><Icon className="size-5" /></span><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-[10px] text-muted-foreground">Open queue · {time}</p></div><strong className="font-mono text-success">{reward}</strong><Button size="sm" className="rounded-full" disabled={!r} onClick={() => onAction(`Task|${title}|${reward.slice(1)}`)}>Start task <ChevronRight /></Button></article>)}</div><div className="rounded-[14px] border border-border bg-card p-6"><Label>Today</Label><p className="mt-3 font-mono text-4xl">${earned.toFixed(2)}</p><p className="mt-2 text-xs text-success">{done} tasks completed</p><div className="mt-8 space-y-3"><ProgressRow label="Daily goal" value={`${Math.min(100, done * 10)}%`} /></div></div></div></section>;
+function ActiveEarn({
+  onAction,
+  earned,
+  done,
+  attempts,
+  terms,
+  attemptedTasks,
+  taskLimit,
+}: {
+  onAction: (value: string) => void;
+  earned: number;
+  done: number;
+  attempts: number;
+  terms: Terms;
+  attemptedTasks: string[];
+  taskLimit: number;
+}) {
+  const rewardRangeConfig = terms.taskReward;
+  const taskDefinitions = [
+    { title: "Validate product labels", detail: "Match products to their best-fit category.", time: "~3 min", icon: Bot, tier: 0 },
+    { title: "Tag customer intent", detail: "Classify short customer messages.", time: "~2 min", icon: CircleHelp, tier: 0.15 },
+    { title: "Review AI summary", detail: "Check generated summaries for factuality and tone.", time: "~4 min", icon: Sparkles, tier: 0.35 },
+    { title: "Classify satellite tiles", detail: "Identify the dominant land use in map tiles.", time: "~3 min", icon: Layers3, tier: 0.5 },
+    { title: "Check product attributes", detail: "Review product details for accuracy.", time: "~3 min", icon: Check, tier: 0.6 },
+    { title: "Screen listing content", detail: "Flag restricted or sensitive listing content.", time: "~4 min", icon: ShieldCheck, tier: 0.75 },
+    { title: "Categorize help requests", detail: "Route support messages to the right team.", time: "~2 min", icon: CircleHelp, tier: 0.85 },
+    { title: "Detect duplicate listings", detail: "Compare listing details for likely duplicates.", time: "~4 min", icon: Search, tier: 1 },
+  ];
+  const tasks = taskDefinitions.map((task) => {
+    const amount = rewardRangeConfig
+      ? Math.round((rewardRangeConfig.min + (rewardRangeConfig.max - rewardRangeConfig.min) * task.tier) * 100) / 100
+      : null;
+    return { ...task, reward: amount == null ? "Unconfigured" : `$${amount.toFixed(2)}` };
+  });
+  const remaining = Math.max(0, taskLimit - attempts);
+  const visibleTasks = tasks.filter((task) => !attemptedTasks.includes(task.title));
+  const atLimit = remaining === 0;
+  const completedPercent = Math.min(100, Math.round((attempts / taskLimit) * 100));
+
+  return (
+    <section>
+      <PageIntro
+        eyebrow="Active Earn"
+        title="Earn by completing quality tasks."
+        copy={`${rewardRange(rewardRangeConfig)} per accepted task · Up to ${taskLimit} task attempts per session · Rewards depend on task acceptance`}
+      />
+      <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-3">
+          {atLimit ? (
+            <div className="rounded-[14px] border border-success/25 bg-success/5 p-6">
+              <h2 className="text-base font-semibold">Session task limit reached</h2>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                You used all {taskLimit} task attempts this session. Attempt limits and earnings
+                reset when you reload the app.
+              </p>
+            </div>
+          ) : visibleTasks.length === 0 ? (
+            <div className="rounded-[14px] border border-border bg-card p-6">
+              <h2 className="text-base font-semibold">You completed every available task</h2>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Check back when more tasks are available.
+              </p>
+            </div>
+          ) : (
+            visibleTasks.map(({ title, detail, reward, time, icon: Icon }) => (
+              <article
+                key={title}
+                className="flex flex-wrap items-center gap-3 rounded-[14px] border border-border bg-card p-4 sm:flex-nowrap sm:gap-4 sm:p-5"
+              >
+                <span className="vault-icon accent-task shrink-0">
+                  <Icon className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold">{title}</h2>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{detail} · {time}</p>
+                </div>
+                <strong className="font-mono text-success">{reward}</strong>
+                <Button
+                  size="sm"
+                  className="rounded-full"
+                  disabled={!rewardRangeConfig || atLimit}
+                  onClick={() => onAction(`Task|${title}|${reward.slice(1)}`)}
+                >
+                  Start task <ChevronRight />
+                </Button>
+              </article>
+            ))
+          )}
+        </div>
+        <aside className="h-fit rounded-[14px] border border-border bg-card p-6">
+          <Label>This session</Label>
+          <p className="mt-3 font-mono text-4xl">${earned.toFixed(2)}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{done} accepted · {attempts} of {taskLimit} attempts used</p>
+          <div className="mt-5">
+            <ProgressRow label="Session limit" value={`${completedPercent}%`} />
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {remaining} {remaining === 1 ? "attempt" : "attempts"} remaining in this session
+          </p>
+          <p className="mt-5 border-t border-border pt-4 text-[10px] leading-relaxed text-muted-foreground">
+            Earnings are awarded only for accepted work. Task availability and reward amounts are
+            subject to the applicable task terms.
+          </p>
+        </aside>
+      </div>
+    </section>
+  );
 }
 
 function WalletLedger({ rows, cash, earned, onAction, onReceipt, wallet, onConnect }: { rows: typeof activity; cash: number; earned: number; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
