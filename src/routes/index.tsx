@@ -617,7 +617,7 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
             <rect x="28" y="20" width="464" height="175" fill="transparent" />
           </svg>
         </div>
-        <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground"><span>{formatDate(chartPoints[0].date)}</span><span className="flex items-center gap-2"><i className="text-success">{isProjection ? "– Projection" : "– Estimated"}</i><i>{isProjection ? "$1,000 illustration · not invested" : "– Simulated yield"}</i></span><span>{formatDate(chartPoints[32].date)}</span></div>
+        <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground"><span>{(chartPoints[0] ? formatDate(chartPoints[0].date) : "")}</span><span className="flex items-center gap-2"><i className="text-success">{isProjection ? "– Projection" : "– Estimated"}</i><i>{isProjection ? "$1,000 illustration · not invested" : "– Simulated yield"}</i></span><span>{(chartPoints[32] ? formatDate(chartPoints[32].date) : "")}</span></div>
         <div className="mt-4 grid grid-cols-3 gap-2">
           <Metric label={hasAllocation ? "Blended net APY" : "Illustrative APY"} value={missingActiveRate ? "Unconfigured" : `${(hasAllocation ? blendedRate : chartRate).toFixed(2)}%`} note={hasAllocation ? `${alloc.Cash}% cash · ${alloc.Cloud}% cloud · ${alloc.Digital}% digital` : "Example 40/35/25 vault mix"} success />
           <Metric label="Daily run-rate" value={dailyAccrual == null ? "Unconfigured" : `+${formatMoney(dailyAccrual)}`} note="/ day · at current balance" success />
