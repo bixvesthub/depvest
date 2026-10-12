@@ -300,6 +300,7 @@ function DepVestApp() {
         view={view}
         onView={go}
         wallet={wallet}
+        walletBalance={walletBalance}
         onConnect={() => setConnectOpen(true)}
         onDisconnect={disconnect}
         onProfile={() => setProfileOpen(true)}
@@ -376,7 +377,8 @@ function DepVestApp() {
   );
 }
 
-function Header({ view, onView, wallet, onConnect, onDisconnect, onProfile, onNotice, onMore }: {
+function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore }: {
+  walletBalance: number;
   onMore: () => void;
   view: View;
   onView: (view: View) => void;
