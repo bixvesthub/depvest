@@ -39,27 +39,48 @@ export async function analyzePortfolio(input: AdvisorInput): Promise<Advice> {
     model: provider.responses("openai/gpt-6-astra"),
     system: SYSTEM,
     prompt: JSON.stringify(input),
-    onError: ({ error }) => { failure = error; },
+    onError: ({ error }) => {
+      failure = error;
+    },
     providerOptions: {
-      openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] },
+      openai: {
+        forceReasoning: true,
+        reasoningEffort: "low",
+        reasoningSummary: "auto",
+        store: false,
+        include: ["reasoning.encrypted_content"],
+      },
     },
   });
   const text = await result.text;
   if (failure || !text) {
     const status = (failure as { statusCode?: number } | null)?.statusCode;
-    if (status === 402) throw new Error("AI credits are used up. Add credits in workspace billing to continue.");
-    if (status === 429) throw new Error("Too many requests right now. Please wait a minute and try again.");
+    if (status === 402)
+      throw new Error("AI credits are used up. Add credits in workspace billing to continue.");
+    if (status === 429)
+      throw new Error("Too many requests right now. Please wait a minute and try again.");
     if (status === 403) throw new Error("AI access is blocked for this workspace.");
     console.error("advisor failed", failure);
     throw new Error("The advisor could not complete the analysis. Please try again.");
   }
-  const raw = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as Record<string, any>;
+  const raw = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as Record<
+    string,
+    string | number | boolean | null | undefined | Array<unknown> | Record<string, unknown>
+  >;
   const s = raw["suggested"] ?? {};
   const keys = ["Cash", "Cloud", "Digital", "Task"] as const;
-  const sug = Object.fromEntries(keys.map((k) => [k, Math.max(0, Math.round(Number(s[k]) || 0))])) as Advice["suggested"];
+  const sug = Object.fromEntries(
+    keys.map((k) => [k, Math.max(0, Math.round(Number(s[k]) || 0))]),
+  ) as Advice["suggested"];
   const sum = keys.reduce((a, k) => a + sug[k], 0);
   if (sum !== 100) sug.Cash = Math.max(0, sug.Cash + (100 - sum));
-  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 4).map((x: string) => x.slice(0, 240)) : []);
+  const list = (v: unknown) =>
+    Array.isArray(v)
+      ? v
+          .filter((x) => typeof x === "string")
+          .slice(0, 4)
+          .map((x: string) => x.slice(0, 240))
+      : [];
   return {
     score: Math.min(100, Math.max(1, Math.round(Number(raw["score"]) || 50))),
     summary: String(raw["summary"] ?? "").slice(0, 400),
