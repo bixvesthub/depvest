@@ -99,7 +99,7 @@ export function ConnectWalletDialog({ open, onOpenChange, onConnected }: { open:
   );
 }
 
-export function WalletChip({ wallet, onDisconnect, onNotice }: { wallet: string; onDisconnect: () => void; onNotice: (m: string) => void }) {
+export function WalletChip({ wallet, balance = 0, onDisconnect, onNotice }: { wallet: string; balance?: number; onDisconnect: () => void; onNotice: (m: string) => void }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -114,7 +114,7 @@ export function WalletChip({ wallet, onDisconnect, onNotice }: { wallet: string;
         <p className="mt-2 font-mono text-base">{WALLET_ADDRESS}</p>
         <div className="mt-3 flex gap-2">
           <span className="rounded-full border border-digital/30 bg-digital/10 px-2 py-0.5 text-[10px] text-digital">● Base</span>
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">1,240.16 USDC</span>
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">{balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC</span>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button size="sm" variant="outline" onClick={() => onNotice("Wallet address copied")}><Copy />Copy</Button>

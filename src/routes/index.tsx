@@ -42,6 +42,7 @@ import {
   WALLET_ADDRESS,
   type Receipt,
 } from "@/components/depvest/extras";
+import { AdvisorDialog } from "@/components/depvest/advisor";
 import { CalculatorDialog, exportLedgerCsv, RebalanceDialog, TaskDialog, TransferDialog, VaultDetailDialog, type Alloc, type DepositStrategyName, type Flow } from "@/components/depvest/flows";
 import { About, FAQ, HowItWorks, Rules, Support } from "@/components/depvest/pages";
 import { DEFAULT_TERMS, pct, rewardRange, type Terms } from "@/components/depvest/terms";
@@ -206,6 +207,8 @@ function DepVestApp() {
   const [terms, setTerms] = useState<Terms>(DEFAULT_TERMS);
   const [ledger, setLedger] = useState<typeof activity>([]);
   const [wallet, setWallet] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [advisorOpen, setAdvisorOpen] = useState(false);
   const [pendingFlow, setPendingFlow] = useState<Flow>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -265,6 +268,7 @@ function DepVestApp() {
       const initial = { ...current, Cash: 0, [targetKey]: current[targetKey] + current.Cash };
       return requireWallet({ kind: "rebalance", initial, targetVault });
     }
+    if (a === "Risk Check") return setAdvisorOpen(true);
     if (a === "Calculator") { return setFlow({ kind: "calculator" }); }
     if (a === "Waitlist") return showNotice("Waitlist joined — DePIN vaults coming soon");
     if (a === "Quick Earn") { showNotice("Quick Earn queue opened"); return go("Active Earn"); }
@@ -333,10 +337,11 @@ function DepVestApp() {
           <Check className="size-4 shrink-0 text-success" /> <span className="truncate">{notice}</span>
         </div>
       )}
-      <TransferDialog flow={flow} cash={availableCash} terms={terms} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onNotice={showNotice}
-        onDeposit={(n, net, strategyAlloc, strategyName) => { if (!wallet) return requireWallet(flow); setFlow(null); const id = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, { status: "pending", vaultId: strategyName }); showNotice(`Deposit of ${fmt(n)} with ${strategyName} is pending clearing`); settleEntry(id, () => { setCash((c) => c + n); setAlloc(strategyAlloc); }, `Deposit of ${fmt(n)} with ${strategyName} confirmed`); }}
-        onWithdraw={(n, net) => { if (!wallet) return requireWallet(flow); setFlow(null); const id = addEntry("USDC withdrawal", `-${fmt(n)}`, `${net} • ${stamp()}`, "digital", ArrowDownToLine, { status: "pending", vaultId: "Connected wallet", settlementTier: net.includes("Instant") ? "Express" : "Standard T+1" }); showNotice(`Withdrawal of ${fmt(n)} is pending clearing`); settleEntry(id, () => setCash((c) => c - n), `Withdrawal of ${fmt(n)} confirmed`); }} />
+      <TransferDialog flow={flow} cash={availableCash} walletBalance={walletBalance} terms={terms} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onNotice={showNotice}
+        onDeposit={(n, net, strategyAlloc, strategyName) => { if (!wallet) return requireWallet(flow); setFlow(null); const id = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, { status: "pending", vaultId: strategyName }); setWalletBalance((b) => Math.max(0, b - n)); showNotice(`Deposit of ${fmt(n)} with ${strategyName} is pending clearing`); settleEntry(id, () => { setCash((c) => c + n); setAlloc(strategyAlloc); }, `Deposit of ${fmt(n)} with ${strategyName} confirmed`); }}
+        onWithdraw={(n, net) => { if (!wallet) return requireWallet(flow); setFlow(null); const id = addEntry("USDC withdrawal", `-${fmt(n)}`, `${net} • ${stamp()}`, "digital", ArrowDownToLine, { status: "pending", vaultId: "Connected wallet", settlementTier: net.includes("Instant") ? "Express" : "Standard T+1" }); showNotice(`Withdrawal of ${fmt(n)} is pending clearing`); settleEntry(id, () => { setCash((c) => c - n); const fee = /fee \$([\d.,]+)/.exec(net); setWalletBalance((b) => b + n - (fee ? Number(fee[1]!.replace(/,/g, "")) : 0)); }, `Withdrawal of ${fmt(n)} confirmed`); }} />
       <RebalanceDialog open={flow?.kind === "rebalance"} alloc={alloc} initial={flow?.kind === "rebalance" ? flow.initial ?? null : null} targetVault={flow?.kind === "rebalance" ? flow.targetVault ?? null : null} total={cash} rebalanceFee={terms.fees.rebalance} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onSave={(a) => { if (!wallet) return requireWallet(flow); setAlloc(a); setFlow(null); addEntry("Portfolio rebalanced", "$0.00", `Target mix updated • ${stamp()}`, "cloud", RefreshCw); showNotice("Target mix saved"); }} />
+      <AdvisorDialog open={advisorOpen} onClose={() => setAdvisorOpen(false)} alloc={alloc} total={cash} onApply={(a) => { setAdvisorOpen(false); requireWallet({ kind: "rebalance", initial: a }); }} />
       <CalculatorDialog open={flow?.kind === "calculator"} onClose={() => setFlow(null)} onInvest={(amount, target) => {
         const strategyName: DepositStrategyName = target.Cloud >= 60 ? "Aggressive Tech" : target.Cash >= 60 ? "Conservative Haven" : "Balanced Yield";
         requireWallet({ kind: "deposit", initialAmount: amount, initialAlloc: target, initialStrategy: strategyName });
@@ -356,7 +361,7 @@ function DepVestApp() {
         settleEntry(id, () => {}, `Task payout of ${fmt(reward)} confirmed`);
       }} />
       <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc)).find((v) => v.name === flow.name) ?? null) : null} onClose={() => setFlow(null)} onNotice={showNotice} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
-      <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => { setWallet(w); setConnectOpen(false); const requestedFlow = pendingFlow; setPendingFlow(null); if (requestedFlow?.kind === "task") { setTasksStarted((current) => current + 1); setStartedTaskTitles((current) => [...current, requestedFlow.title]); } if (requestedFlow) setFlow(requestedFlow); showNotice(`${WALLET_ADDRESS} connected on Base network`); }} />
+      <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => { setWallet(w); setWalletBalance(1240.16); setConnectOpen(false); const requestedFlow = pendingFlow; setPendingFlow(null); if (requestedFlow?.kind === "task") { setTasksStarted((current) => current + 1); setStartedTaskTitles((current) => [...current, requestedFlow.title]); } if (requestedFlow) setFlow(requestedFlow); showNotice(`${WALLET_ADDRESS} connected on Base network`); }} />
       <ProfileSheet
         open={profileOpen}
         onOpenChange={setProfileOpen}
@@ -397,7 +402,7 @@ function Header({ view, onView, wallet, onConnect, onDisconnect, onProfile, onNo
             {moreItems.map((m) => <button key={m.label} onClick={() => onView(m.label)} className={cn("rounded-full px-3 py-2 text-xs transition-colors", view === m.label ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>{m.label}</button>)}
           </div>
           {wallet ? (
-            <WalletChip wallet={wallet} onDisconnect={onDisconnect} onNotice={onNotice} />
+            <WalletChip wallet={wallet} balance={walletBalance} onDisconnect={onDisconnect} onNotice={onNotice} />
           ) : (
             <Button onClick={onConnect} className="h-9 shrink-0 rounded-full bg-success px-3 text-primary-foreground hover:bg-success/90 sm:px-4">
               <WalletCards /><span className="hidden sm:inline">Connect Wallet</span><span className="sm:hidden">Connect</span>
@@ -498,6 +503,7 @@ function PortfolioSummary({ onAction, alloc, total }: { onAction: (value: string
           <Button variant="outline" className="shrink-0 justify-center rounded-full" onClick={() => onAction("Withdraw funds")}><ArrowDownToLine />Withdraw</Button>
           <Button variant="outline" className="shrink-0 justify-center rounded-full" onClick={() => onAction("Rebalance")}><RefreshCw />Rebalance</Button>
           <Button className="shrink-0 justify-center rounded-full border border-success/25 bg-success/15 text-success hover:bg-success/20" onClick={() => onAction("Quick Earn")}><Zap />Quick Earn</Button>
+          <Button variant="outline" className="col-span-2 shrink-0 justify-center rounded-full lg:col-span-1" onClick={() => onAction("Risk Check")}><Sparkles />AI Risk Check</Button>
         </div>
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border px-6 py-4 text-[10px] text-muted-foreground md:px-8"><span>◉ Rates shown only once verified</span><span>◉ 4 vaults</span></div>
