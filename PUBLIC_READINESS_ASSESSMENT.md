@@ -22,7 +22,6 @@ DepVest is a **fully functional, production-ready portfolio dashboard** that can
 ## What's Working ✅
 
 ### Core Functionality
-
 - **Portfolio Dashboard**: Track allocations (Cash, Cloud, Digital, Task) with real-time visualization
 - **Investment Views**: Vault details, performance charts, yield calculator
 - **Active Earn**: Task queue, payouts, daily earnings tracking
@@ -34,7 +33,6 @@ DepVest is a **fully functional, production-ready portfolio dashboard** that can
 - **AI Risk Advisor**: Portfolio analysis with personalized recommendations (requires LOVABLE_API_KEY)
 
 ### Technical Health
-
 - **Build Status**: Clean build with no TypeScript errors or warnings
 - **Test Coverage**: 1/1 tests passing
 - **Architecture**: Full-stack React with TanStack Start (Server Functions, routing)
@@ -43,7 +41,6 @@ DepVest is a **fully functional, production-ready portfolio dashboard** that can
 - **Error Handling**: Global error boundary, graceful fallbacks, user-friendly messages
 
 ### Code Quality
-
 - **No Critical Issues**: Linting configured, no hardcoded secrets
 - **Type Safety**: Full TypeScript with strict checking
 - **Dependencies**: Stable, industry-standard packages (React 19, TanStack Router, Radix UI)
@@ -94,7 +91,6 @@ When launching publicly, add clear language that:
 > **⚠️ Educational Demo**: DepVest is a UI prototype demonstrating investment dashboard concepts. All data is simulated for demonstration purposes only. This is not a real financial product and does not interface with actual blockchain networks, exchanges, or banking systems. Do not use with real funds.
 
 This can appear in:
-
 - Landing page
 - Footer
 - "About" section
@@ -105,15 +101,12 @@ This can appear in:
 ## Deployment Readiness
 
 ### Lovable Integration
-
 - The app is connected to Lovable and synced to Git
 - Commits are clean; history is intact and ready for public viewing
 - Recommend keeping branch clean before launch
 
 ### Environment Setup
-
 For the AI Advisor feature:
-
 ```bash
 LOVABLE_API_KEY=<your-key>
 npm run build
@@ -123,7 +116,6 @@ npm run preview
 Without the API key, the app still works; the Advisor just shows an error.
 
 ### Hosting
-
 - Build target: Cloudflare (configured in wrangler.json)
 - `npm run build` produces a `.output/` directory ready for deployment
 - Live preview: https://depvest.lovable.app
@@ -134,7 +126,7 @@ Without the API key, the app still works; the Advisor just shows an error.
 
 1. **Advisor requires API key**: Without `LOVABLE_API_KEY`, the risk advisor shows an error
    - This is intentional; error messaging is user-friendly
-
+   
 2. **No data persistence**: Closing the browser tab loses all state
    - Explicitly designed this way (no database)
    - Users expect this in a demo
@@ -158,7 +150,6 @@ Without the API key, the app still works; the Advisor just shows an error.
 ## Recommendation
 
 **Launch with confidence.** This app is:
-
 - Visually polished
 - Functionally complete for a demo
 - Technically sound
@@ -166,7 +157,6 @@ Without the API key, the app still works; the Advisor just shows an error.
 - Error-resistant
 
 Simply ensure:
-
 1. Clear disclaimer that it's a demo/prototype
 2. No expectations of real transactions
 3. Set `LOVABLE_API_KEY` if you want the AI Advisor to work

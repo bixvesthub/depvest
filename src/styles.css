@@ -165,91 +165,26 @@
     background-image: linear-gradient(to bottom, oklch(0.12 0.026 250 / 0.5), transparent 22rem);
   }
 
-  button,
-  a,
-  input {
-    letter-spacing: 0;
-  }
+  button, a, input { letter-spacing: 0; }
 }
 
 @layer components {
-  .allocation-ring {
-    background: conic-gradient(
-      var(--success) 0 35%,
-      var(--cloud) 35% 75%,
-      var(--digital) 75% 95%,
-      var(--task) 95% 100%
-    );
-  }
-  .vault-icon {
-    display: grid;
-    width: 2.75rem;
-    height: 2.75rem;
-    flex-shrink: 0;
-    place-items: center;
-    border-radius: 0.5rem;
-    border: 1px solid;
-  }
-  .accent-cash {
-    color: var(--success);
-    border-color: color-mix(in oklab, var(--success) 25%, transparent);
-    background: color-mix(in oklab, var(--success) 10%, transparent);
-  }
-  .accent-cloud {
-    color: var(--cloud);
-    border-color: color-mix(in oklab, var(--cloud) 25%, transparent);
-    background: color-mix(in oklab, var(--cloud) 10%, transparent);
-  }
-  .accent-digital {
-    color: var(--digital);
-    border-color: color-mix(in oklab, var(--digital) 25%, transparent);
-    background: color-mix(in oklab, var(--digital) 10%, transparent);
-  }
-  .accent-task {
-    color: var(--task);
-    border-color: color-mix(in oklab, var(--task) 25%, transparent);
-    background: color-mix(in oklab, var(--task) 10%, transparent);
-  }
-  .badge-cash {
-    color: var(--success);
-    border-color: color-mix(in oklab, var(--success) 22%, transparent);
-    background: color-mix(in oklab, var(--success) 10%, transparent);
-  }
-  .badge-cloud {
-    color: var(--cloud);
-    border-color: color-mix(in oklab, var(--cloud) 22%, transparent);
-    background: color-mix(in oklab, var(--cloud) 10%, transparent);
-  }
-  .badge-digital {
-    color: var(--digital);
-    border-color: color-mix(in oklab, var(--digital) 22%, transparent);
-    background: color-mix(in oklab, var(--digital) 10%, transparent);
-  }
-  .badge-task {
-    color: var(--task);
-    border-color: color-mix(in oklab, var(--task) 22%, transparent);
-    background: color-mix(in oklab, var(--task) 10%, transparent);
-  }
-  .bar-cash {
-    background-color: var(--success);
-  }
-  .bar-cloud {
-    background-color: var(--cloud);
-  }
-  .bar-digital {
-    background-color: var(--digital);
-  }
-  .bar-task {
-    background-color: var(--task);
-  }
+  .allocation-ring { background: conic-gradient(var(--success) 0 35%, var(--cloud) 35% 75%, var(--digital) 75% 95%, var(--task) 95% 100%); }
+  .vault-icon { display: grid; width: 2.75rem; height: 2.75rem; flex-shrink: 0; place-items: center; border-radius: 0.5rem; border: 1px solid; }
+  .accent-cash { color: var(--success); border-color: color-mix(in oklab, var(--success) 25%, transparent); background: color-mix(in oklab, var(--success) 10%, transparent); }
+  .accent-cloud { color: var(--cloud); border-color: color-mix(in oklab, var(--cloud) 25%, transparent); background: color-mix(in oklab, var(--cloud) 10%, transparent); }
+  .accent-digital { color: var(--digital); border-color: color-mix(in oklab, var(--digital) 25%, transparent); background: color-mix(in oklab, var(--digital) 10%, transparent); }
+  .accent-task { color: var(--task); border-color: color-mix(in oklab, var(--task) 25%, transparent); background: color-mix(in oklab, var(--task) 10%, transparent); }
+  .badge-cash { color: var(--success); border-color: color-mix(in oklab, var(--success) 22%, transparent); background: color-mix(in oklab, var(--success) 10%, transparent); }
+  .badge-cloud { color: var(--cloud); border-color: color-mix(in oklab, var(--cloud) 22%, transparent); background: color-mix(in oklab, var(--cloud) 10%, transparent); }
+  .badge-digital { color: var(--digital); border-color: color-mix(in oklab, var(--digital) 22%, transparent); background: color-mix(in oklab, var(--digital) 10%, transparent); }
+  .badge-task { color: var(--task); border-color: color-mix(in oklab, var(--task) 22%, transparent); background: color-mix(in oklab, var(--task) 10%, transparent); }
+  .bar-cash { background-color: var(--success); }
+  .bar-cloud { background-color: var(--cloud); }
+  .bar-digital { background-color: var(--digital); }
+  .bar-task { background-color: var(--task); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
