@@ -46,7 +46,7 @@ const Shell = ({ open, onClose, eyebrow, title, desc, children }: { open: boolea
 const Preview = () => <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><LockKeyhole className="size-3" />Preview only — no real funds move</p>;
 
 /* ---------------- Deposit / Withdraw ---------------- */
-export function TransferDialog({ flow, cash, terms, walletAddress, onWalletRequired, onClose, onDeposit, onWithdraw, onNotice }: { flow: Flow; cash: number; terms: Terms; walletAddress: string | null; onWalletRequired: () => void; onClose: () => void; onDeposit: (n: number, net: string, alloc: Alloc, strategyName: DepositStrategyName) => void; onWithdraw: (n: number, net: string) => void; onNotice: Notice }) {
+export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAddress, onWalletRequired, onClose, onDeposit, onWithdraw, onNotice }: { flow: Flow; cash: number; walletBalance?: number; terms: Terms; walletAddress: string | null; onWalletRequired: () => void; onClose: () => void; onDeposit: (n: number, net: string, alloc: Alloc, strategyName: DepositStrategyName) => void; onWithdraw: (n: number, net: string) => void; onNotice: Notice }) {
   const isDeposit = flow?.kind === "deposit";
   const open = flow?.kind === "deposit" || flow?.kind === "withdraw";
   const [net, setNet] = useState("Base");
@@ -68,7 +68,7 @@ export function TransferDialog({ flow, cash, terms, walletAddress, onWalletRequi
   const n = Number(amount) || 0;
   const fee = !isDeposit && instant ? Math.round(n * 1.5) / 100 : 0;
   const dvFee = isDeposit ? terms.fees.deposit : instant ? `${money(fee)} (1.5% express)` : "Free (standard)";
-  const error = n <= 0 ? "Enter an amount" : n > 1_000_000 ? "Maximum is $1,000,000" : !isDeposit && n > cash ? `Only ${money(cash)} available` : !isDeposit && !/^0x[a-fA-F0-9]{40}$/.test(dest.trim()) ? "Enter a valid 0x wallet address (42 characters)" : "";
+  const error = n <= 0 ? "Enter an amount" : n > 1_000_000 ? "Maximum is $1,000,000" : isDeposit && walletAddress && n > walletBalance ? `Wallet holds only ${money(walletBalance)} USDC` : !isDeposit && n > cash ? `Only ${money(cash)} available` : !isDeposit && !/^0x[a-fA-F0-9]{40}$/.test(dest.trim()) ? "Enter a valid 0x wallet address (42 characters)" : "";
   const submit = () => {
     if (error || busy) return;
     if (!walletAddress) { onWalletRequired(); return; }
@@ -88,7 +88,8 @@ export function TransferDialog({ flow, cash, terms, walletAddress, onWalletRequi
         </div>}
         <div><Cap>Amount (USDC)</Cap>
           <div className="mt-2 flex items-center rounded-md border border-input bg-background px-4"><span className="text-muted-foreground">$</span><input inputMode="decimal" maxLength={10} value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} className="h-12 w-full bg-transparent px-2 font-mono text-lg outline-none" /></div>
-          <div className="mt-2 flex flex-wrap gap-2">{(isDeposit ? [250, 1000, 5000] : [100, 250, Math.floor(cash)]).map((p, i) => <button key={i} onClick={() => setAmount(String(p))} className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px]">{!isDeposit && i === 2 ? "Max" : money(p)}</button>)}</div>
+          {walletAddress && <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground"><span>{isDeposit ? "Wallet balance" : "DepVest available"}: <b className="font-mono text-foreground">{money(isDeposit ? walletBalance : cash)} USDC</b></span>{!isDeposit && <span>Wallet: <span className="font-mono">{money(walletBalance)}</span></span>}</div>}
+          <div className="mt-2 flex flex-wrap gap-2">{(isDeposit ? [250, 1000] : [100, 250]).map((p) => <button key={p} onClick={() => setAmount(String(p))} className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px]">{money(p)}</button>)}<button onClick={() => setAmount(String(Math.floor((isDeposit ? walletBalance : cash) * 100) / 100))} className="rounded-full bg-success/15 px-3 py-1 font-mono text-[10px] text-success">Max</button></div>
         </div>
         {isDeposit && <div>
           <div className="flex items-center justify-between gap-2"><Cap>Deployment Strategy</Cap><span className="text-[9px] text-muted-foreground">Applied when deposit settles</span></div>
