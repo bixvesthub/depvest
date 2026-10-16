@@ -15,6 +15,7 @@ import {
   Coins,
   Cpu,
   Database,
+  Gift,
   HelpCircle,
   Landmark,
   Layers3,
@@ -50,6 +51,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { createReferralCode } from "@/lib/referral";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -200,6 +202,10 @@ function DepVestApp() {
   const [flow, setFlow] = useState<Flow>(null);
   const [cash, setCash] = useState(0);
   const [earned, setEarned] = useState(0);
+  const [referralEarnings, setReferralEarnings] = useState(0);
+  const [pendingReferralEarnings, setPendingReferralEarnings] = useState(0);
+  const [activeReferrals, setActiveReferrals] = useState(0);
+  const [appliedReferralCode, setAppliedReferralCode] = useState<string | null>(null);
   const [tasksDone, setTasksDone] = useState(0);
   const [tasksStarted, setTasksStarted] = useState(0);
   const [startedTaskTitles, setStartedTaskTitles] = useState<string[]>([]);
@@ -245,6 +251,7 @@ function DepVestApp() {
     .filter((row) => row.status === "pending" && /withdrawal/i.test(row.title))
     .reduce((total, row) => total + Math.abs(Number(row.value.replace(/[^\d.]/g, ""))), 0);
   const availableCash = Math.max(0, cash - pendingWithdrawals);
+  const referralCode = wallet ? createReferralCode(wallet) : null;
   const allocationTotal = Object.values(alloc).reduce((sum, value) => sum + value, 0);
   const idleCash = Math.max(0, availableCash * (allocationTotal === 0 ? 1 : alloc.Cash / 100));
   const cashIsUnallocated = allocationTotal === 0 || (alloc.Cash === 100 && alloc.Cloud === 0 && alloc.Digital === 0 && alloc.Task === 0);
@@ -292,6 +299,30 @@ function DepVestApp() {
     requireWallet(name ? { kind: "deposit", vault: name } : { kind: "deposit" });
   };
   const disconnect = () => { setWallet(null); setProfileOpen(false); showNotice("Wallet disconnected"); };
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      showNotice(`${label} copied`);
+    } catch {
+      showNotice("Clipboard access is unavailable in this browser");
+    }
+  };
+  const addPreviewReferralReward = () => {
+    const reward = 2.5;
+    setPendingReferralEarnings((current) => current + reward);
+    setReferralEarnings((current) => current + reward);
+    setEarned((current) => current + reward);
+    setActiveReferrals((current) => current + 1);
+    showNotice("Sample referral reward of $2.50 added to this preview");
+  };
+  const claimReferralRewards = () => {
+    if (pendingReferralEarnings <= 0) return;
+    const amount = pendingReferralEarnings;
+    setPendingReferralEarnings(0);
+    setCash((current) => current + amount);
+    addEntry("Referral rewards claimed", `+${fmt(amount)}`, `Moved to available cash • ${stamp()}`, "cash", Gift);
+    showNotice(`${fmt(amount)} in referral rewards moved to Available cash`);
+  };
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
@@ -311,7 +342,18 @@ function DepVestApp() {
         {view === "Invest" && <Invest onAction={setAction} terms={terms} />}
         {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={earned} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
         {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
-        {view === "Invite Friends" && <InviteFriends onNotice={showNotice} />}
+        {view === "Invite Friends" && <InviteFriends
+          referralCode={referralCode}
+          referralEarnings={referralEarnings}
+          pendingReferralEarnings={pendingReferralEarnings}
+          activeReferrals={activeReferrals}
+          appliedReferralCode={appliedReferralCode}
+          onNotice={showNotice}
+          onCopy={copyToClipboard}
+          onApplyReferralCode={setAppliedReferralCode}
+          onAddPreviewReward={addPreviewReferralReward}
+          onClaim={claimReferralRewards}
+        />}
         {view === "How It Works" && <HowItWorks terms={terms} onStart={() => go("Invest")} />}
         {view === "Q&A" && <FAQ terms={terms} onSupport={() => go("Support")} />}
         {view === "About" && <About />}
@@ -367,9 +409,11 @@ function DepVestApp() {
         open={profileOpen}
         onOpenChange={setProfileOpen}
         wallet={wallet}
+        referralCode={referralCode}
         onConnect={() => { setProfileOpen(false); setConnectOpen(true); }}
         onDisconnect={disconnect}
         onInvite={() => go("Invite Friends")}
+        onCopyReferral={() => referralCode && copyToClipboard(referralCode, "Referral code")}
         onNotice={showNotice}
       />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} onNotice={showNotice} />
@@ -774,10 +818,10 @@ function WalletLedger({ rows, cash, earned, onAction, onReceipt, wallet, onConne
     <div className="grid gap-4 sm:grid-cols-3 sm:gap-5"><WalletStat label="Available cash" value={`$${cash.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<WalletCards />} /><WalletStat label="Pending yield" value="—" note="Accrues once funds are allocated to a vault with a verified rate" icon={<Activity />} /><WalletStat label="Total earned" value={`$${earned.toFixed(2)}`} icon={<BarChart3 />} /></div><div className="mt-6 rounded-[14px] border border-border bg-card"><div className="border-b border-border p-5"><div className="min-w-0"><h2 className="text-sm font-semibold">Transaction ledger</h2><p className="mt-1 text-[10px] text-muted-foreground">Tap an entry to view its receipt</p></div></div><LedgerFilters rows={rows} onReceipt={onReceipt} /></div></section>;
 }
 
-const LEDGER_TYPES = ["All", "Deposits", "Withdrawals", "Tasks", "Rebalances"] as const;
+const LEDGER_TYPES = ["All", "Deposits", "Withdrawals", "Tasks", "Referrals", "Rebalances"] as const;
 const LEDGER_RANGES = ["All Time", "Today", "Last 7 Days", "Last 30 Days", "Custom"] as const;
 const LEDGER_STATUSES = ["All Status", "Pending", "Completed"] as const;
-const typeOf = (t: string) => /deposit/i.test(t) ? "Deposits" : /withdraw/i.test(t) ? "Withdrawals" : /task|payout/i.test(t) ? "Tasks" : /rebalanc/i.test(t) ? "Rebalances" : "Other";
+const typeOf = (t: string) => /deposit/i.test(t) ? "Deposits" : /withdraw/i.test(t) ? "Withdrawals" : /task|payout/i.test(t) ? "Tasks" : /referral/i.test(t) ? "Referrals" : /rebalanc/i.test(t) ? "Rebalances" : "Other";
 const localDayStart = (value: string) => {
   const [year, month, day] = value.split("-").map(Number);
   return year && month && day ? new Date(year, month - 1, day).getTime() : null;

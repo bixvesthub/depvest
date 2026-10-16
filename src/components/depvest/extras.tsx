@@ -12,7 +12,6 @@ import {
   KeyRound,
   Landmark,
   LogOut,
-  QrCode,
   Search,
   ShieldCheck,
   Sparkles,
@@ -163,13 +162,15 @@ export function NotificationsPopover() {
 
 /* ---------------- Profile ---------------- */
 
-export function ProfileSheet({ open, onOpenChange, wallet, onConnect, onDisconnect, onInvite, onNotice }: {
+export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConnect, onDisconnect, onInvite, onCopyReferral, onNotice }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   wallet: string | null;
+  referralCode: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
   onInvite: () => void;
+  onCopyReferral: () => void;
   onNotice: (m: string) => void;
 }) {
   const [prefs, setPrefs] = useState({ yield: true, rebalance: true, security: true });
@@ -197,7 +198,7 @@ export function ProfileSheet({ open, onOpenChange, wallet, onConnect, onDisconne
               
               <Row k="Membership" v="Standard" />
               <Row k="Fees" v="0% deposit / withdraw" />
-              <Row k="Referral code" v="—" />
+              <Row k="Referral code" v={referralCode ? <span className="inline-flex items-center gap-2 font-mono">{referralCode}<button type="button" aria-label="Copy referral code" className="text-success hover:text-success/80" onClick={onCopyReferral}><Copy className="size-3.5" /></button></span> : "Connect wallet"} />
             </dl>
           </section>
 
@@ -283,68 +284,113 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
 
 /* ---------------- Invite friends ---------------- */
 
-const friends: Array<{ name: string; status: string; earned: string }> = [];
-
-export function InviteFriends({ onNotice }: { onNotice: (m: string) => void }) {
-  const [showQr, setShowQr] = useState(false);
-  const link = "depvest.io/join";
+export function InviteFriends({ referralCode, referralEarnings, pendingReferralEarnings, activeReferrals, appliedReferralCode, onNotice, onCopy, onApplyReferralCode, onAddPreviewReward, onClaim }: {
+  referralCode: string | null;
+  referralEarnings: number;
+  pendingReferralEarnings: number;
+  activeReferrals: number;
+  appliedReferralCode: string | null;
+  onNotice: (m: string) => void;
+  onCopy: (value: string, label: string) => void;
+  onApplyReferralCode: (value: string) => void;
+  onAddPreviewReward: () => void;
+  onClaim: () => void;
+}) {
+  const [referralInput, setReferralInput] = useState(() => typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref")?.toUpperCase() ?? "" : "");
+  const link = referralCode && typeof window !== "undefined"
+    ? `${window.location.origin}/?ref=${encodeURIComponent(referralCode)}`
+    : "";
+  const shareMessage = link ? `Join me on DepVest: ${link}` : "";
+  const currentTier = activeReferrals >= 10 ? 3 : activeReferrals >= 3 ? 2 : activeReferrals >= 1 ? 1 : 0;
+  const nextTierAt = currentTier === 0 ? 1 : currentTier === 1 ? 3 : currentTier === 2 ? 10 : 10;
+  const progress = currentTier === 3 ? 100 : Math.min(100, (activeReferrals / nextTierAt) * 100);
+  const applyReferral = () => {
+    const code = referralInput.trim().toUpperCase();
+    if (!/^DV-[A-Z0-9]{6}$/.test(code)) {
+      onNotice("Enter a valid referral code in DV-XXXXXX format");
+      return;
+    }
+    if (code === referralCode) {
+      onNotice("You cannot apply your own referral code");
+      return;
+    }
+    if (appliedReferralCode) {
+      onNotice("A referral code has already been applied");
+      return;
+    }
+    onApplyReferralCode(code);
+    setReferralInput(code);
+    onNotice(`Referral code ${code} saved in this preview`);
+  };
   return (
     <section>
-      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Share your link. When friends deposit, you earn a share of their daily yield — they get a welcome boost too." />
+      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Share your personal invite link and track referral rewards. Referral activity and claims on this page are a local preview, not live payouts." />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Stat icon={<Gift />} label="Rewards earned" value="$0.00" />
-        <Stat icon={<Users />} label="Friends invited" value="0" />
-        <Stat icon={<Check />} label="Active depositors" value="0" />
-        <Stat icon={<Sparkles />} label="Current tier" value="—" />
+        <Stat icon={<Gift />} label="Rewards earned" value={`$${referralEarnings.toFixed(2)}`} />
+        <Stat icon={<Users />} label="Friends invited" value={String(activeReferrals)} />
+        <Stat icon={<Check />} label="Active referrals" value={String(activeReferrals)} />
+        <Stat icon={<Sparkles />} label="Current tier" value={currentTier ? `Tier ${currentTier}` : "Not reached"} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[14px] border border-border bg-card p-5 md:p-6">
+          <Eyebrow>Your personal referral code</Eyebrow>
+          <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <div className="flex h-11 min-w-0 items-center rounded-md border border-input bg-background px-3 font-mono text-sm"><span className="truncate">{referralCode ?? "Connect a wallet to get your code"}</span></div>
+            <Button className="h-11" disabled={!referralCode} onClick={() => referralCode && onCopy(referralCode, "Referral code")}><Copy />Copy</Button>
+          </div>
           <Eyebrow>Your invite link</Eyebrow>
           <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-            <div className="flex h-11 min-w-0 items-center rounded-md border border-input bg-background px-3 font-mono text-sm"><span className="truncate">{link}</span></div>
-            <Button className="h-11" onClick={() => onNotice("Invite link copied")}><Copy />Copy</Button>
+            <div className="flex h-11 min-w-0 items-center rounded-md border border-input bg-background px-3 font-mono text-sm"><span className="truncate">{link || "Connect a wallet to create an invite link"}</span></div>
+            <Button className="h-11" disabled={!link} onClick={() => onCopy(link, "Invite link")}><Copy />Copy</Button>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowQr(!showQr)}><QrCode />{showQr ? "Hide QR" : "Show QR"}</Button>
-            <Button variant="outline" size="sm" onClick={() => onNotice("Shared to WhatsApp")}>WhatsApp</Button>
-            <Button variant="outline" size="sm" onClick={() => onNotice("Shared to X")}>X / Twitter</Button>
-            <Button variant="outline" size="sm" onClick={() => onNotice("Email invite drafted")}>Email</Button>
+            {link ? <>
+              <a className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent" href={`https://wa.me/?text=${encodeURIComponent(shareMessage)}`} target="_blank" rel="noreferrer">WhatsApp</a>
+              <a className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent" href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}`} target="_blank" rel="noreferrer">X / Twitter</a>
+              <a className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent" href={`mailto:?subject=${encodeURIComponent("Join me on DepVest")}&body=${encodeURIComponent(shareMessage)}`}>Email</a>
+            </> : <>
+              <Button variant="outline" size="sm" disabled>WhatsApp</Button>
+              <Button variant="outline" size="sm" disabled>X / Twitter</Button>
+              <Button variant="outline" size="sm" disabled>Email</Button>
+            </>}
           </div>
-          {showQr && (
-            <div className="mt-5 grid place-items-center rounded-md border border-border bg-background/40 p-6">
-              <div className="grid size-40 grid-cols-8 gap-0.5 rounded-md bg-foreground p-2">
-                {Array.from({ length: 64 }).map((_, i) => <span key={i} className={cn("rounded-[1px]", (i * 7 + (i % 5) * 3) % 3 === 0 ? "bg-background" : "bg-foreground")} />)}
-              </div>
-              <p className="mt-3 font-mono text-[10px] text-muted-foreground">DepVest invite</p>
-            </div>
-          )}
 
           <div className="mt-8">
-            <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Progress to Tier 3 (15%)</span><span className="font-mono">0 / 10 active</span></div>
-            <div className="mt-2 h-2 rounded-full bg-secondary"><div className="h-full w-0 rounded-full bg-primary" /></div>
+            <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">{currentTier === 3 ? "Highest referral tier reached (15%)" : `Progress to Tier ${currentTier + 1} (${(currentTier + 1) * 5}%)`}</span><span className="font-mono">{activeReferrals} / {nextTierAt} active</span></div>
+            <div className="mt-2 h-2 rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} /></div>
             <div className="mt-5 grid grid-cols-3 gap-2 text-center">
               {[["Tier 1", "5%", "1+ friend"], ["Tier 2", "10%", "3+ friends"], ["Tier 3", "15%", "10+ friends"]].map(([t, p, r], i) => (
-                <div key={t} className={cn("rounded-md border p-3", false ? "border-success/40 bg-success/10" : "border-border bg-background/30")}>
+                <div key={t} className={cn("rounded-md border p-3", currentTier >= i + 1 ? "border-success/40 bg-success/10" : "border-border bg-background/30")}>
                   <p className="text-[10px] text-muted-foreground">{t}</p>
-                  <p className={cn("mt-1 font-mono text-lg", false && "text-success")}>{p}</p>
+                  <p className={cn("mt-1 font-mono text-lg", currentTier >= i + 1 && "text-success")}>{p}</p>
                   <p className="mt-1 text-[9px] text-muted-foreground">{r}</p>
                 </div>
               ))}
             </div>
           </div>
+
+          <div className="mt-6 rounded-md border border-border bg-background/40 p-4">
+            <Eyebrow>Friend's referral code</Eyebrow>
+            {appliedReferralCode ? <p className="mt-3 text-xs">Applied code <span className="font-mono font-semibold">{appliedReferralCode}</span> in this preview.</p> : <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <input aria-label="Friend's referral code" value={referralInput} onChange={(event) => setReferralInput(event.target.value.toUpperCase())} maxLength={9} placeholder="DV-XXXXXX" className="h-10 min-w-0 rounded-md border border-input bg-background px-3 font-mono text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              <Button variant="outline" onClick={applyReferral}>Apply code</Button>
+            </div>}
+            <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">Code attribution is stored only in this local preview and is not verified against an account.</p>
+          </div>
         </div>
 
         <div className="rounded-[14px] border border-border bg-card">
-          <div className="border-b border-border p-5"><p className="text-sm font-semibold">Your friends</p><p className="mt-1 text-[10px] text-muted-foreground">Rewards paid daily at 00:00 UTC</p></div>
-          {friends.length === 0 && <p className="p-8 text-center text-xs text-muted-foreground">No friends invited yet. Share your link to get started.</p>}
-          {friends.map((f) => (
-            <div key={f.name} className="flex items-center gap-3 border-b border-border px-5 py-3 last:border-0">
-              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-semibold">{f.name.slice(0, 2).toUpperCase()}</span>
-              <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{f.name}</p><p className={cn("text-[10px]", f.status === "Depositing" ? "text-success" : "text-muted-foreground")}>{f.status}</p></div>
-              <span className="font-mono text-xs">{f.earned}</span>
+          <div className="border-b border-border p-5"><p className="text-sm font-semibold">Referral rewards</p><p className="mt-1 text-[10px] text-muted-foreground">Available to claim: ${pendingReferralEarnings.toFixed(2)} · Local preview</p></div>
+          <div className="space-y-3 p-5">
+            <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Claim to Cash</Button>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards move into Available cash and appear in Wallet history.</p>
+            <div className="border-t border-border pt-4">
+              <p className="text-xs font-medium">Preview referral activity</p>
+              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">No referral earnings service is connected. Add a sample $2.50 reward to preview tier and claim behavior.</p>
+              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={onAddPreviewReward}>Add sample referral reward · $2.50</Button>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </section>
