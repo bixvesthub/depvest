@@ -251,7 +251,7 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Custody & support",
       q: "How can I contact support?",
-      a: "Support contact details are not published in this interface. Never share passwords, private keys, or seed phrases with anyone claiming to be support.",
+      a: "Official support channels will be listed on the Support page once published. Never share passwords, private keys, or seed phrases with anyone claiming to be support.",
     },
   ];
   const entries = terms.faqs.length ? terms.faqs : productFaqs;
