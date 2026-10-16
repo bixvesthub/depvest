@@ -6,3 +6,7 @@ export function createReferralCode(wallet: string) {
   }
   return `DV-${(hash >>> 0).toString(36).toUpperCase().padStart(6, "0").slice(-6)}`;
 }
+
+export function qualifiesReferral(registrationSucceeded: boolean, accountActivated: boolean) {
+  return registrationSucceeded && accountActivated;
+}

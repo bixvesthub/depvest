@@ -284,7 +284,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
 
 /* ---------------- Invite friends ---------------- */
 
-export function InviteFriends({ referralCode, referralEarnings, pendingReferralEarnings, activeReferrals, appliedReferralCode, onNotice, onCopy, onApplyReferralCode, onAddPreviewReward, onClaim }: {
+export function InviteFriends({ referralCode, referralEarnings, pendingReferralEarnings, activeReferrals, appliedReferralCode, onNotice, onCopy, onApplyReferralCode, onAddPreviewActivatedReferral, onClaim }: {
   referralCode: string | null;
   referralEarnings: number;
   pendingReferralEarnings: number;
@@ -293,7 +293,7 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
   onNotice: (m: string) => void;
   onCopy: (value: string, label: string) => void;
   onApplyReferralCode: (value: string) => void;
-  onAddPreviewReward: () => void;
+  onAddPreviewActivatedReferral: () => void;
   onClaim: () => void;
 }) {
   const [referralInput, setReferralInput] = useState(() => typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref")?.toUpperCase() ?? "" : "");
@@ -324,11 +324,11 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
   };
   return (
     <section>
-      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Share your personal invite link and track referral rewards. Referral activity and claims on this page are a local preview, not live payouts." />
+      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Referral activity and claims on this page are a local preview, not live payouts." />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat icon={<Gift />} label="Rewards earned" value={`$${referralEarnings.toFixed(2)}`} />
-        <Stat icon={<Users />} label="Friends invited" value={String(activeReferrals)} />
-        <Stat icon={<Check />} label="Active referrals" value={String(activeReferrals)} />
+        <Stat icon={<Users />} label="Qualified referrals" value={String(activeReferrals)} />
+        <Stat icon={<Check />} label="Activated accounts" value={String(activeReferrals)} />
         <Stat icon={<Sparkles />} label="Current tier" value={currentTier ? `Tier ${currentTier}` : "Not reached"} />
       </div>
 
@@ -386,9 +386,9 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
             <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Claim to Cash</Button>
             <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards move into Available cash and appear in Wallet history.</p>
             <div className="border-t border-border pt-4">
-              <p className="text-xs font-medium">Preview referral activity</p>
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">No referral earnings service is connected. Add a sample $2.50 reward to preview tier and claim behavior.</p>
-              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={onAddPreviewReward}>Add sample referral reward · $2.50</Button>
+              <p className="text-xs font-medium">Preview a qualified referral</p>
+              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">No account-registration service is connected. This preview action represents a friend who registered successfully and activated their account; only then is the referral counted and the sample reward added.</p>
+              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={onAddPreviewActivatedReferral}>Simulate successful registration + activation · $2.50</Button>
             </div>
           </div>
         </div>

@@ -51,7 +51,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { createReferralCode } from "@/lib/referral";
+import { createReferralCode, qualifiesReferral } from "@/lib/referral";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -307,13 +307,17 @@ function DepVestApp() {
       showNotice("Clipboard access is unavailable in this browser");
     }
   };
-  const addPreviewReferralReward = () => {
+  const addPreviewActivatedReferral = (registrationSucceeded: boolean, accountActivated: boolean) => {
+    if (!qualifiesReferral(registrationSucceeded, accountActivated)) {
+      showNotice("Referral does not qualify until registration succeeds and the account is activated");
+      return;
+    }
     const reward = 2.5;
     setPendingReferralEarnings((current) => current + reward);
     setReferralEarnings((current) => current + reward);
     setEarned((current) => current + reward);
     setActiveReferrals((current) => current + 1);
-    showNotice("Sample referral reward of $2.50 added to this preview");
+    showNotice("Activated referral qualified; sample $2.50 reward added to this preview");
   };
   const claimReferralRewards = () => {
     if (pendingReferralEarnings <= 0) return;
@@ -351,7 +355,7 @@ function DepVestApp() {
           onNotice={showNotice}
           onCopy={copyToClipboard}
           onApplyReferralCode={setAppliedReferralCode}
-          onAddPreviewReward={addPreviewReferralReward}
+          onAddPreviewActivatedReferral={() => addPreviewActivatedReferral(true, true)}
           onClaim={claimReferralRewards}
         />}
         {view === "How It Works" && <HowItWorks terms={terms} onStart={() => go("Invest")} />}
