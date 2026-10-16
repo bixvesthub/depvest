@@ -49,7 +49,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Strategies & yield",
       q: "When is yield compounded or credited?",
-      a: "Treasury cash shows daily compounding, AI compute pays at the end of each 30-day epoch, and digital assets accrue flexibly with a 7-day unstaking period. Projections on the Portfolio page are estimates, not guarantees.",
+      a: "Unconfirmed estimate: Treasury cash is expected to compound daily, AI compute to pay at the end of each 30-day epoch, and digital assets to accrue flexibly with a 7-day unstaking period. These payout timings are not yet established terms and may change once official strategy terms are published. Portfolio projections are estimates, not guarantees.",
     },
     {
       category: "Fees & eligibility",
@@ -59,7 +59,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Fees & eligibility",
       q: "Is there a minimum deposit or lock-up period?",
-      a: "No minimum deposit is configured. Treasury cash has no lock, AI compute runs in 30-day epochs, and digital assets have a 7-day unstaking period. Deposits cannot exceed your wallet balance.",
+      a: "Unconfirmed estimate: no minimum deposit is currently set, Treasury cash is expected to have no lock, AI compute to run in 30-day epochs, and digital assets to have a 7-day unstaking period. These are not yet established terms and may change. Deposits cannot exceed your wallet balance.",
     },
     {
       category: "Deposits & withdrawals",
@@ -99,7 +99,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Referrals",
       q: "How does the referral program work?",
-      a: "Connect a wallet to get your personal code (DV-XXXXXX) and invite link. A referral counts once your friend registers and activates their account. Tiers: 5% (1+ friend), 10% (3+), 15% (10+). Self-referrals are not accepted.",
+      a: "Connect a wallet to get your personal code (DV-XXXXXX) and invite link. A referral counts once your friend registers and activates their account. Estimated tiers (unconfirmed, not yet established terms): 5% (1+ friend), 10% (3+), 15% (10+). Self-referrals are not accepted.",
     },
     {
       category: "Referrals",

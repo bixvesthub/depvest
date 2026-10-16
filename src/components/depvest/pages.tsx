@@ -410,6 +410,7 @@ export function Rules({ terms }: { terms: Terms }) {
       t: "Account and transaction access",
       items: [
         "Deposits, withdrawals, rebalances, and tasks require a connected wallet on a supported network (Base or Ethereum).",
+        "Minimum deposit: none currently set — this is an unconfirmed estimate, not an established term.",
         "Ledger entries show Clearing until settled; a Clearing entry is not final.",
         "Do not send funds to an address unless it is confirmed through a verified official product flow.",
       ],
@@ -436,6 +437,7 @@ export function Rules({ terms }: { terms: Terms }) {
         "Standard settlement is free and settles T+1.",
         "Instant settlement carries a 1.5% fee, deducted from the amount received.",
         "Withdrawals cannot exceed Available Cash; pending withdrawals are held until settled.",
+        "Payout timing (daily Treasury compounding, 30-day compute epochs, 7-day digital unstaking) is an unconfirmed estimate, not an established term.",
       ],
     },
     {
@@ -451,7 +453,7 @@ export function Rules({ terms }: { terms: Terms }) {
       items: [
         "Each connected wallet gets a personal code (DV-XXXXXX); self-referrals are not accepted.",
         "A referral counts only after the friend registers successfully and activates their account.",
-        "Tiers: 5% (1+ friend), 10% (3+), 15% (10+). Claimed rewards move to Available Cash.",
+        "Estimated tiers: 5% (1+ friend), 10% (3+), 15% (10+). These rates are unconfirmed estimates, not established terms. Claimed rewards move to Available Cash.",
       ],
     },
     {
