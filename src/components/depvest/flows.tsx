@@ -46,7 +46,7 @@ const Shell = ({ open, onClose, eyebrow, title, desc, children }: { open: boolea
 const Preview = () => <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><LockKeyhole className="size-3" />Confirm amounts and network fees in your wallet before signing</p>;
 
 /* ---------------- Deposit / Withdraw ---------------- */
-export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAddress, onWalletRequired, onClose, onDeposit, onWithdraw, onNotice }: { flow: Flow; cash: number; walletBalance?: number; terms: Terms; walletAddress: string | null; onWalletRequired: () => void; onClose: () => void; onDeposit: (n: number, net: string, alloc: Alloc, strategyName: DepositStrategyName) => void; onWithdraw: (n: number, net: string) => void; onNotice: Notice }) {
+export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance = 0, terms, walletAddress, onWalletRequired, onRebalanceToCash, onClose, onDeposit, onWithdraw, onNotice }: { flow: Flow; cash: number; investedCapital?: number; walletBalance?: number; terms: Terms; walletAddress: string | null; onWalletRequired: () => void; onRebalanceToCash: () => void; onClose: () => void; onDeposit: (n: number, net: string, alloc: Alloc, strategyName: DepositStrategyName) => void; onWithdraw: (n: number, net: string, fee: number) => void; onNotice: Notice }) {
   const isDeposit = flow?.kind === "deposit";
   const open = flow?.kind === "deposit" || flow?.kind === "withdraw";
   const [net, setNet] = useState("Base");
@@ -65,21 +65,27 @@ export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAdd
   useEffect(() => { if (open) { setAmount(isDeposit ? String(initialAmount ?? 1000) : "250"); setDest(""); setBusy(false); setQr(false); setInstant(false); setStrategyName(defaultStrategy); } }, [open, isDeposit, initialAmount, defaultStrategy]);
   const selectedStrategy = DEPOSIT_STRATEGIES.find((item) => item.name === strategyName) ?? DEPOSIT_STRATEGIES[0]!;
   const strategy = initialAlloc && initialStrategy === strategyName ? { ...selectedStrategy, alloc: initialAlloc } : selectedStrategy;
-  const n = Number(amount) || 0;
+  const n = Math.round((Number(amount) || 0) * 100) / 100;
   const fee = !isDeposit && instant ? Math.round(n * 1.5) / 100 : 0;
   const dvFee = isDeposit ? terms.fees.deposit : instant ? `${money(fee)} (1.5% express)` : "Free (standard)";
-  const error = n <= 0 ? "Enter an amount" : n > 1_000_000 ? "Maximum is $1,000,000" : isDeposit && walletAddress && n > walletBalance ? `Wallet holds only ${money(walletBalance)} USDC` : !isDeposit && n > cash ? `Only ${money(cash)} available` : !isDeposit && !/^0x[a-fA-F0-9]{40}$/.test(dest.trim()) ? "Enter a valid 0x wallet address (42 characters)" : "";
+  const withdrawalExceedsCash = !isDeposit && n > cash;
+  const withdrawalNeedsRebalance = !isDeposit && (cash <= 0 || withdrawalExceedsCash);
+  const error = n <= 0 ? "Enter an amount" : n > 1_000_000 ? "Maximum is $1,000,000" : isDeposit && walletAddress && n > walletBalance ? `Wallet holds only ${money(walletBalance)} USDC` : withdrawalExceedsCash ? `Only ${money(cash)} withdrawable cash is available` : !isDeposit && !/^0x[a-fA-F0-9]{40}$/.test(dest.trim()) ? "Enter a valid 0x wallet address (42 characters)" : "";
   const submit = () => {
     if (error || busy) return;
     if (!walletAddress) { onWalletRequired(); return; }
     setBusy(true);
     if (isDeposit) onDeposit(n, net, strategy.alloc, strategy.name);
-    else onWithdraw(n, `${net} · ${instant ? `Instant, fee ${money(fee)}` : "Standard T+1"}`);
+    else onWithdraw(n, `${net} · ${instant ? `Instant, fee ${money(fee)}` : "Standard T+1"}`, fee);
   };
   return (
-    <Shell open={open} onClose={onClose} eyebrow={isDeposit ? "Deposit · USDC" : "Withdraw · instant USDC"} title={isDeposit ? (vault ? `Add funds to ${vault}` : "Deposit funds") : "Withdraw funds"} desc={isDeposit ? "Send USDC to your DepVest address or pick an amount to simulate." : `Available cash: ${money(cash)}. Withdrawals settle in minutes.`}>
+    <Shell open={open} onClose={onClose} eyebrow={isDeposit ? "Deposit · USDC" : "Withdraw · liquid USDC"} title={isDeposit ? (vault ? `Add funds to ${vault}` : "Deposit funds") : "Withdraw funds"} desc={isDeposit ? "Send USDC to your DepVest address or pick an amount to simulate." : "Only settled liquid cash can be withdrawn directly."}>
       <div className="space-y-5">
         {open && <div className="rounded-md border border-success/25 bg-success/5 p-3 text-[11px]"><Cap>Authorizing wallet</Cap><p className="mt-1 font-mono text-success">{walletAddress ?? "Connect wallet to continue"}</p></div>}
+        {!isDeposit && <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-background/40 p-3 text-[11px]">
+          <div><Cap>Withdrawable Cash</Cap><p className="mt-1 font-mono text-sm font-semibold">{money(cash)}</p></div>
+          <div><Cap>Invested in Vaults</Cap><p className="mt-1 font-mono text-sm font-semibold">{money(investedCapital)} <span className="text-[9px] font-normal text-muted-foreground">(Locked)</span></p></div>
+        </div>}
         <div><Cap>Network</Cap><div className="mt-2 grid grid-cols-2 gap-2">{["Base", "Ethereum"].map((x) => <button key={x} onClick={() => setNet(x)} className={cn("rounded-md border p-3 text-left text-sm", net === x ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><b className="block">{x}</b><span className="text-[10px] text-muted-foreground">Gas paid in your wallet</span></button>)}</div></div>
         {isDeposit && <div className="rounded-md border border-border bg-background/40 p-3">
           <div className="flex items-center justify-between"><Cap>Your USDC address ({net})</Cap><button onClick={() => setQr(!qr)} className="flex items-center gap-1 text-[10px] text-success"><QrCode className="size-3" />{qr ? "Hide" : "Show"} QR</button></div>
@@ -88,7 +94,7 @@ export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAdd
         </div>}
         <div><Cap>Amount (USDC)</Cap>
           <div className="mt-2 flex items-center rounded-md border border-input bg-background px-4"><span className="text-muted-foreground">$</span><input inputMode="decimal" maxLength={10} value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} className="h-12 w-full bg-transparent px-2 font-mono text-lg outline-none" /></div>
-          {walletAddress && <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground"><span>{isDeposit ? "Wallet balance" : "DepVest available"}: <b className="font-mono text-foreground">{money(isDeposit ? walletBalance : cash)} USDC</b></span>{!isDeposit && <span>Wallet: <span className="font-mono">{money(walletBalance)}</span></span>}</div>}
+          {walletAddress && <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground"><span>{isDeposit ? "Wallet balance" : "Withdrawable cash"}: <b className="font-mono text-foreground">{money(isDeposit ? walletBalance : cash)} USDC</b></span>{!isDeposit && <span>Wallet: <span className="font-mono">{money(walletBalance)}</span></span>}</div>}
           <div className="mt-2 flex flex-wrap gap-2">{(isDeposit ? [250, 1000] : [100, 250]).map((p) => <button key={p} onClick={() => setAmount(String(p))} className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px]">{money(p)}</button>)}<button onClick={() => setAmount(String(Math.floor((isDeposit ? walletBalance : cash) * 100) / 100))} className="rounded-full bg-success/15 px-3 py-1 font-mono text-[10px] text-success">Max</button></div>
         </div>
         {isDeposit && <div>
@@ -113,7 +119,11 @@ export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAdd
           <div className="flex justify-between"><span className="text-muted-foreground">DepVest fee</span><span className={dvFee ? "" : "text-muted-foreground"}>{dvFee ?? "Unconfigured"}</span></div>
           <div className="flex justify-between border-t border-border pt-1"><span className="text-muted-foreground">{isDeposit ? "Amount" : "You receive"}</span><b>{money(n - fee)}</b></div>
         </div>
-        {error && n > 0 && <p className="text-[11px] text-destructive">{error}</p>}
+        {withdrawalNeedsRebalance && <div className="space-y-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] text-warning" role="alert">
+          <p>Invested funds ({money(investedCapital)} across vaults) cannot be withdrawn directly. Rebalance your portfolio back to liquid cash first.</p>
+          <Button variant="outline" className="w-full border-warning/40 text-warning hover:bg-warning/10" onClick={onRebalanceToCash}><RefreshCw />Rebalance to Liquid Cash</Button>
+        </div>}
+        {error && n > 0 && !withdrawalExceedsCash && <p className="text-[11px] text-destructive">{error}</p>}
         <Preview />
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={!!error || busy} onClick={submit}>{busy ? "Processing…" : isDeposit ? "Confirm deposit" : "Withdraw now"}{!busy && (isDeposit ? <ArrowUpRight /> : <ArrowDownToLine />)}</Button></div>
       </div>
@@ -123,6 +133,7 @@ export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAdd
 
 /* ---------------- Rebalance ---------------- */
 const PRESETS: Array<{ name: string; icon: string; a: Alloc }> = [
+  { name: "Liquid Cash Only", icon: "💵", a: { Cash: 100, Cloud: 0, Digital: 0, Task: 0 } },
   { name: "Conservative Haven", icon: "🛡️", a: { Cash: 75, Cloud: 15, Digital: 10, Task: 0 } },
   { name: "Balanced Yield", icon: "⚖️", a: { Cash: 40, Cloud: 35, Digital: 25, Task: 0 } },
   { name: "Aggressive Tech", icon: "🚀", a: { Cash: 10, Cloud: 65, Digital: 25, Task: 0 } },
@@ -156,7 +167,7 @@ export function RebalanceDialog({ open, alloc, initial, targetVault, total: bala
     <Shell open={open} onClose={onClose} eyebrow="Rebalance portfolio" title={targetVault ? `Allocate cash to ${targetVault}` : "Set your target mix"} desc={targetVault ? "The proposed mix moves the currently liquid cash allocation into this vault. Adjust it or choose a preset before confirming." : "Drag sliders — total must equal 100%."}>
       <div className="space-y-5">
         <Bar a={draft} />
-        <div className="grid grid-cols-3 gap-2">{PRESETS.map((p) => { const on = keys.every((k) => draft[k] === p.a[k]); return <button key={p.name} onClick={() => setDraft(p.a)} aria-pressed={on} className={cn("rounded-md border p-2 text-left text-[11px]", on ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><b className="block">{p.icon} {p.name}</b><span className="font-mono text-[9px] text-muted-foreground">{p.a.Cash}/{p.a.Cloud}/{p.a.Digital}/{p.a.Task}</span></button>; })}</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{PRESETS.map((p) => { const on = keys.every((k) => draft[k] === p.a[k]); return <button key={p.name} onClick={() => setDraft(p.a)} aria-pressed={on} className={cn("rounded-md border p-2 text-left text-[11px]", on ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><b className="block">{p.icon} {p.name}</b><span className="font-mono text-[9px] text-muted-foreground">{p.a.Cash}/{p.a.Cloud}/{p.a.Digital}/{p.a.Task}</span></button>; })}</div>
         {keys.map((k) => (
           <div key={k}><div className="mb-2 flex justify-between text-xs"><span className="flex items-center gap-2"><i className={cn("size-2 rounded-full", colors[k])} />{k}</span><b className="font-mono">{draft[k]}%</b></div>
             <Slider aria-label={`${k} allocation`} value={[draft[k]]} max={100} step={1} onValueChange={([v]) => setDraft({ ...draft, [k]: v ?? 0 })} /></div>
@@ -411,32 +422,38 @@ export function TaskDialog({ flow, walletAddress, onWalletRequired, onClose, onC
 }
 
 /* ---------------- Vault deep-dive ---------------- */
-export function VaultDetailDialog({ vault, onClose, onDeposit, onNotice }: { vault: VaultInfo | null; onClose: () => void; onDeposit: (name: string) => void; onNotice: Notice }) {
+export function VaultDetailDialog({ vault, unallocatedCash, onClose, onDeposit, onAllocate }: { vault: VaultInfo | null; unallocatedCash: number; onClose: () => void; onDeposit: (name: string) => void; onAllocate: (name: string) => void }) {
   return (
     <Shell open={!!vault} onClose={onClose} eyebrow="Vault deep-dive" title={vault?.name ?? ""} desc={vault?.detail ?? ""}>
       {vault && <div className="space-y-5">
-        <div className="grid grid-cols-3 gap-2">{[["Rate", `${vault.rate}`], ["Risk", vault.risk], ["Your balance", vault.balance]].map(([l, v]) => <div key={l} className="rounded-md border border-border bg-secondary/50 p-3"><Cap>{l}</Cap><p className="mt-2 truncate font-mono text-xs font-semibold">{v}</p></div>)}</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Rate", `${vault.rate}`], ["Risk", vault.risk], ["Your Vault Balance", vault.balance], ["Available Unallocated Cash", money(unallocatedCash)]].map(([l, v]) => <div key={l} className="rounded-md border border-border bg-secondary/50 p-3"><Cap>{l}</Cap><p className="mt-2 truncate font-mono text-xs font-semibold">{v}</p></div>)}</div>
         <div><Cap>Yield history & utilization</Cap><p className="mt-2 rounded-md border border-dashed border-border p-3 text-center text-[11px] text-muted-foreground">No verified history yet.</p></div>
         <ul className="space-y-2 text-[11px] text-muted-foreground">
                     <li className="flex gap-2"><LockKeyhole className="size-3.5 shrink-0" />Terms: {vault.terms}</li>
         </ul>
-        <div className="flex flex-wrap justify-end gap-2"><Button onClick={() => onDeposit(vault.name)}>Add funds<ArrowUpRight /></Button></div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button disabled={unallocatedCash <= 0} onClick={() => onAllocate(vault.name)}><ArrowUpRight />Deploy Available Cash</Button>
+          <Button variant="outline" onClick={() => onDeposit(vault.name)}><ArrowUpRight />Deposit More from Wallet</Button>
+        </div>
+        <p className="text-[10px] leading-relaxed text-muted-foreground">Deploy Available Cash reallocates existing liquid balance internally. Deposit More from Wallet starts a separate USDC transfer from your connected wallet.</p>
       </div>}
     </Shell>
   );
 }
 
 /* ---------------- CSV ---------------- */
-export function exportLedgerCsv(rows: Array<{ title: string; value: string; meta: string; timestamp?: number; status?: string; reference?: string; vaultId?: string; settlementTier?: string }>) {
+export function exportLedgerCsv(rows: Array<{ title: string; value: string; meta: string; timestamp?: number; status?: string; reference?: string; vaultId?: string; settlementTier?: string; feeBreakdown?: { network: number | null; depvest: number } }>) {
   const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
-  const csv = ["Timestamp,Description,Amount,Status,Vault,Settlement,Reference,Details", ...rows.map((r) => [
+  const csv = ["Timestamp,Description,Amount,Status,Vault,Settlement,Reference,Network fee,DepVest fee,Details", ...rows.map((r) => [
     r.timestamp == null ? "" : new Date(r.timestamp).toISOString(),
     r.title,
     r.value,
-    r.status ?? "",
+    r.status === "pending" ? "Clearing" : r.status === "completed" ? "Settled" : r.status ?? "",
     r.vaultId ?? "",
     r.settlementTier ?? "",
     r.reference ?? "",
+    r.feeBreakdown?.network == null ? "Shown by wallet" : money(r.feeBreakdown.network),
+    money(r.feeBreakdown?.depvest ?? 0),
     r.meta,
   ].map(esc).join(","))].join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));

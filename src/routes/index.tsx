@@ -31,7 +31,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   ConnectWalletDialog,
@@ -76,7 +76,10 @@ export const Route = createFileRoute("/")({
 type View = "Portfolio" | "Invest" | "Active Earn" | "Wallet & Ledger" | "Invite Friends" | "How It Works" | "Q&A" | "About" | "Rules" | "Support";
 type Accent = "cash" | "cloud" | "digital" | "task";
 type ActivityStatus = "pending" | "completed" | "failed";
-type ActivityRow = {
+type TransactionType = "wallet-snapshot" | "deposit" | "withdrawal" | "rebalance" | "task-payout" | "referral-claim";
+type FeeBreakdown = { network: number | null; depvest: number };
+type BalanceDeltas = { wallet: number; liquid: number; cloud: number; digital: number };
+type ActivityRow = Readonly<{
   id: string;
   title: string;
   value: string;
@@ -88,7 +91,10 @@ type ActivityRow = {
   reference: string;
   vaultId: string;
   settlementTier: string;
-};
+  transactionType: TransactionType;
+  feeBreakdown: FeeBreakdown;
+  balanceDeltas: BalanceDeltas;
+}>;
 
 const navItems: Array<{ label: View; icon: typeof BarChart3; short: string }> = [
   { label: "Portfolio", short: "Portfolio", icon: BarChart3 },
@@ -195,12 +201,18 @@ const vaults: Array<{
 
 const activity: ActivityRow[] = [];
 const TASK_SESSION_LIMIT = 5;
+const STARTING_WALLET_BALANCE = 1240.16;
+const CASH_ONLY: Alloc = { Cash: 100, Cloud: 0, Digital: 0, Task: 0 };
+const cents = (amount: number) => Math.round(amount * 100) / 100;
+const makeReference = () => {
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `DV-${id}`;
+};
 
 function DepVestApp() {
   const [view, setView] = useState<View>("Portfolio");
   const [notice, setNotice] = useState("");
   const [flow, setFlow] = useState<Flow>(null);
-  const [cash, setCash] = useState(0);
   const [earned, setEarned] = useState(0);
   const [referralEarnings, setReferralEarnings] = useState(0);
   const [pendingReferralEarnings, setPendingReferralEarnings] = useState(0);
@@ -209,11 +221,12 @@ function DepVestApp() {
   const [tasksDone, setTasksDone] = useState(0);
   const [tasksStarted, setTasksStarted] = useState(0);
   const [startedTaskTitles, setStartedTaskTitles] = useState<string[]>([]);
-  const [alloc, setAlloc] = useState<Alloc>({ Cash: 0, Cloud: 0, Digital: 0, Task: 0 })
+  const taskAttemptsRef = useRef<Set<string>>(new Set());
+  const referralClaimInFlightRef = useRef(false);
   const [terms, setTerms] = useState<Terms>(DEFAULT_TERMS);
-  const [ledger, setLedger] = useState<typeof activity>([]);
+  const [ledger, setLedger] = useState<ActivityRow[]>([]);
+  const [settlementEvents, setSettlementEvents] = useState<Array<{ reference: string; status: "completed" | "failed"; timestamp: number }>>([]);
   const [wallet, setWallet] = useState<string | null>(null);
-  const [walletBalance, setWalletBalance] = useState(0);
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [pendingFlow, setPendingFlow] = useState<Flow>(null);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -234,28 +247,68 @@ function DepVestApp() {
   };
   const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const stamp = () => new Date().toUTCString().slice(5, 22) + " UTC";
-  const addEntry = (title: string, value: string, meta: string, accent: Accent, icon: typeof Zap, options?: { status?: ActivityStatus; vaultId?: string; settlementTier?: string; reference?: string }) => {
+  const addEntry = (title: string, value: string, meta: string, accent: Accent, icon: typeof Zap, options: {
+    status?: ActivityStatus;
+    vaultId?: string;
+    settlementTier?: string;
+    reference?: string;
+    transactionType: TransactionType;
+    feeBreakdown?: FeeBreakdown;
+    balanceDeltas?: BalanceDeltas;
+  }) => {
     const timestamp = Date.now();
-    const id = `tx-${timestamp}-${Math.random().toString(16).slice(2, 8)}`;
-    setLedger((l) => [{ id, title, value, meta, accent, icon, status: options?.status ?? "completed", timestamp, reference: options?.reference ?? `0x${Math.random().toString(16).slice(2, 10)}…${Math.random().toString(16).slice(2, 6)}`, vaultId: options?.vaultId ?? "DepVest portfolio", settlementTier: options?.settlementTier ?? "Standard T+1" }, ...l]);
-    return id;
+    const reference = options.reference ?? makeReference();
+    const entry: ActivityRow = {
+      id: reference,
+      title,
+      value,
+      meta,
+      accent,
+      icon,
+      status: options.status ?? "completed",
+      timestamp,
+      reference,
+      vaultId: options.vaultId ?? "DepVest portfolio",
+      settlementTier: options.settlementTier ?? "Internal",
+      transactionType: options.transactionType,
+      feeBreakdown: options.feeBreakdown ?? { network: 0, depvest: 0 },
+      balanceDeltas: options.balanceDeltas ?? { wallet: 0, liquid: 0, cloud: 0, digital: 0 },
+    };
+    setLedger((rows) => [...rows, entry]);
+    return reference;
   };
-  const settleEntry = (id: string, onSettled: () => void, message: string) => {
+  const settleEntry = (reference: string, onSettled: () => void, message: string) => {
     window.setTimeout(() => {
-      setLedger((rows) => rows.map((row) => row.id === id ? { ...row, status: "completed" } : row));
+      setSettlementEvents((events) => events.some((event) => event.reference === reference) ? events : [...events, { reference, status: "completed", timestamp: Date.now() }]);
       onSettled();
       showNotice(message);
     }, 3500);
   };
-  const allRows = () => [...ledger, ...activity];
+  const settledReferences = new Set(settlementEvents.filter((event) => event.status === "completed").map((event) => event.reference));
+  const settledEntries = ledger.filter((row) => row.status === "completed" || settledReferences.has(row.reference));
+  const liquidCash = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.liquid, 0));
+  const cloudHoldings = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.cloud, 0));
+  const digitalHoldings = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.digital, 0));
+  const investedCapital = cents(cloudHoldings + digitalHoldings);
+  const portfolioTotal = cents(liquidCash + investedCapital);
+  const walletBalance = wallet ? cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.wallet, 0)) : 0;
   const pendingWithdrawals = ledger
-    .filter((row) => row.status === "pending" && /withdrawal/i.test(row.title))
-    .reduce((total, row) => total + Math.abs(Number(row.value.replace(/[^\d.]/g, ""))), 0);
-  const availableCash = Math.max(0, cash - pendingWithdrawals);
+    .filter((row) => row.transactionType === "withdrawal" && row.status === "pending" && !settledReferences.has(row.reference))
+    .reduce((total, row) => total + Math.max(0, -row.balanceDeltas.liquid), 0);
+  const availableCash = cents(Math.max(0, liquidCash - pendingWithdrawals));
+  const rows = ledger.map((row) => settledReferences.has(row.reference) ? { ...row, status: "completed" as const } : row);
+  const allRows = () => [...rows, ...activity].sort((left, right) => right.timestamp - left.timestamp);
   const referralCode = wallet ? createReferralCode(wallet) : null;
+  const alloc: Alloc = portfolioTotal > 0 ? {
+    Cash: Math.round((liquidCash / portfolioTotal) * 100),
+    Cloud: Math.round((cloudHoldings / portfolioTotal) * 100),
+    Digital: Math.max(0, 100 - Math.round((liquidCash / portfolioTotal) * 100) - Math.round((cloudHoldings / portfolioTotal) * 100)),
+    Task: 0,
+  } : { Cash: 0, Cloud: 0, Digital: 0, Task: 0 };
   const allocationTotal = Object.values(alloc).reduce((sum, value) => sum + value, 0);
-  const idleCash = Math.max(0, availableCash * (allocationTotal === 0 ? 1 : alloc.Cash / 100));
-  const cashIsUnallocated = allocationTotal === 0 || (alloc.Cash === 100 && alloc.Cloud === 0 && alloc.Digital === 0 && alloc.Task === 0);
+  const idleCash = availableCash;
+  const cashIsUnallocated = availableCash > 0;
+  const hasPendingTransfer = ledger.some((row) => (row.transactionType === "deposit" || row.transactionType === "withdrawal") && row.status === "pending" && !settledReferences.has(row.reference));
   const requireWallet = (nextFlow: Flow) => {
     if (wallet) {
       setFlow(nextFlow);
@@ -266,14 +319,36 @@ function DepVestApp() {
     setConnectOpen(true);
   };
   const setAction = (a: string) => {
-    if (a === "Deposit" || a === "Deposit funds") return requireWallet({ kind: "deposit" });
-    if (a === "Withdraw funds") return requireWallet({ kind: "withdraw" });
-    if (a === "Rebalance") return requireWallet({ kind: "rebalance", ...(allocationTotal === 0 ? { initial: { Cash: 100, Cloud: 0, Digital: 0, Task: 0 } } : {}) });
+    if (a === "Deposit" || a === "Deposit funds") {
+      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before starting another one.");
+      return requireWallet({ kind: "deposit" });
+    }
+    if (a === "Withdraw funds") {
+      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before starting another one.");
+      return requireWallet({ kind: "withdraw" });
+    }
+    if (a === "Rebalance") {
+      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+      return requireWallet({ kind: "rebalance", ...(allocationTotal === 0 ? { initial: CASH_ONLY } : {}) });
+    }
+    if (a === "Deploy Available Cash") {
+      if (availableCash <= 0) return showNotice("There is no available liquid cash to deploy.");
+      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+      const investedMix = alloc.Cloud + alloc.Digital > 0
+        ? { Cloud: Math.round((alloc.Cloud / (alloc.Cloud + alloc.Digital)) * 100), Digital: Math.round((alloc.Digital / (alloc.Cloud + alloc.Digital)) * 100) }
+        : { Cloud: 60, Digital: 40 };
+      const initial: Alloc = { Cash: 0, Cloud: investedMix.Cloud, Digital: 100 - investedMix.Cloud, Task: 0 };
+      return requireWallet({ kind: "rebalance", initial });
+    }
     if (a.startsWith("Allocate Cash: ")) {
       const targetVault = a.slice("Allocate Cash: ".length);
-      const targetKey: keyof Alloc = /compute/i.test(targetVault) ? "Cloud" : "Digital";
-      const current = allocationTotal === 0 ? { Cash: 100, Cloud: 0, Digital: 0, Task: 0 } : alloc;
-      const initial = { ...current, Cash: 0, [targetKey]: current[targetKey] + current.Cash };
+      if (availableCash <= 0) return showNotice("There is no available liquid cash to allocate.");
+      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+      const targetKey: keyof Alloc = /compute/i.test(targetVault) ? "Cloud" : /treasury|cash/i.test(targetVault) ? "Cash" : "Digital";
+      const current = allocationTotal === 0 ? CASH_ONLY : alloc;
+      const initial: Alloc = targetKey === "Cash"
+        ? CASH_ONLY
+        : { ...current, Cash: 0, [targetKey]: current[targetKey] + current.Cash };
       return requireWallet({ kind: "rebalance", initial, targetVault });
     }
     if (a === "Risk Check") return setAdvisorOpen(true);
@@ -282,17 +357,17 @@ function DepVestApp() {
     if (a === "Quick Earn") { showNotice("Quick Earn queue opened"); return go("Active Earn"); }
     if (a === "Export ledger") { exportLedgerCsv(allRows()); return showNotice("Ledger exported as CSV"); }
     if (a.startsWith("Task|")) {
-      if (tasksStarted >= TASK_SESSION_LIMIT) {
+      const [, title, reward] = a.split("|");
+      if (!title || !reward || taskAttemptsRef.current.has(title)) return;
+      if (taskAttemptsRef.current.size >= TASK_SESSION_LIMIT) {
         showNotice("Task limit reached for this session.");
         return;
       }
-      const [, title, reward] = a.split("|");
-      if (!title || !reward || startedTaskTitles.includes(title)) return;
+      taskAttemptsRef.current.add(title);
+      setTasksStarted(taskAttemptsRef.current.size);
+      setStartedTaskTitles([...taskAttemptsRef.current]);
       const taskFlow = { kind: "task" as const, title, reward: Number(reward) };
-      if (!wallet) return requireWallet(taskFlow);
-      setTasksStarted((current) => current + 1);
-      setStartedTaskTitles((current) => [...current, title]);
-      return setFlow(taskFlow);
+      return requireWallet(taskFlow);
     }
     if (a.startsWith("Invest in ")) return setFlow({ kind: "vault", name: a.slice(10) });
     if (a.startsWith("Start Earning")) return go("Active Earn");
@@ -321,12 +396,19 @@ function DepVestApp() {
     showNotice("Activated referral qualified; $2.50 reward added to your claimable balance");
   };
   const claimReferralRewards = () => {
-    if (pendingReferralEarnings <= 0) return;
+    if (pendingReferralEarnings <= 0 || referralClaimInFlightRef.current) return;
+    referralClaimInFlightRef.current = true;
     const amount = pendingReferralEarnings;
     setPendingReferralEarnings(0);
-    setCash((current) => current + amount);
-    addEntry("Referral rewards claimed", `+${fmt(amount)}`, `Moved to available cash • ${stamp()}`, "cash", Gift);
-    showNotice(`${fmt(amount)} in referral rewards moved to Available cash`);
+    const reference = addEntry("Referral rewards claimed", `+${fmt(amount)}`, `Claim submitted • ${stamp()}`, "cash", Gift, {
+      status: "pending",
+      transactionType: "referral-claim",
+      settlementTier: "Clearing",
+      vaultId: "Available liquid cash",
+      balanceDeltas: { wallet: 0, liquid: amount, cloud: 0, digital: 0 },
+    });
+    showNotice(`${fmt(amount)} in referral rewards is clearing`);
+    settleEntry(reference, () => { referralClaimInFlightRef.current = false; }, `${fmt(amount)} in referral rewards settled to Available cash`);
   };
 
   return (
@@ -343,10 +425,10 @@ function DepVestApp() {
         onNotice={showNotice}
       />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
-        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={cash} idleCash={idleCash} showIdleBanner={cashIsUnallocated} rows={allRows()} />}
-        {view === "Invest" && <Invest onAction={setAction} terms={terms} />}
+        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} idleCash={idleCash} showIdleBanner={cashIsUnallocated} rows={allRows()} balances={{ Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
+        {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={earned} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
-        {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
+        {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} settledLiquidCash={liquidCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
         {view === "Invite Friends" && <InviteFriends
           referralCode={referralCode}
           referralEarnings={referralEarnings}
@@ -385,31 +467,82 @@ function DepVestApp() {
           <Check className="size-4 shrink-0 text-success" /> <span className="truncate">{notice}</span>
         </div>
       )}
-      <TransferDialog flow={flow} cash={availableCash} walletBalance={walletBalance} terms={terms} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onNotice={showNotice}
-        onDeposit={(n, net, strategyAlloc, strategyName) => { if (!wallet) return requireWallet(flow); setFlow(null); const id = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, { status: "pending", vaultId: strategyName }); setWalletBalance((b) => Math.max(0, b - n)); showNotice(`Deposit of ${fmt(n)} with ${strategyName} is pending clearing`); settleEntry(id, () => { setCash((c) => c + n); setAlloc(strategyAlloc); }, `Deposit of ${fmt(n)} with ${strategyName} confirmed`); }}
-        onWithdraw={(n, net) => { if (!wallet) return requireWallet(flow); setFlow(null); const id = addEntry("USDC withdrawal", `-${fmt(n)}`, `${net} • ${stamp()}`, "digital", ArrowDownToLine, { status: "pending", vaultId: "Connected wallet", settlementTier: net.includes("Instant") ? "Express" : "Standard T+1" }); showNotice(`Withdrawal of ${fmt(n)} is pending clearing`); settleEntry(id, () => { setCash((c) => c - n); const fee = /fee \$([\d.,]+)/.exec(net); setWalletBalance((b) => b + n - (fee ? Number(fee[1]!.replace(/,/g, "")) : 0)); }, `Withdrawal of ${fmt(n)} confirmed`); }} />
-      <RebalanceDialog open={flow?.kind === "rebalance"} alloc={alloc} initial={flow?.kind === "rebalance" ? flow.initial ?? null : null} targetVault={flow?.kind === "rebalance" ? flow.targetVault ?? null : null} total={cash} rebalanceFee={terms.fees.rebalance} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onSave={(a) => { if (!wallet) return requireWallet(flow); setAlloc(a); setFlow(null); addEntry("Portfolio rebalanced", "$0.00", `Target mix updated • ${stamp()}`, "cloud", RefreshCw); showNotice("Target mix saved"); }} />
-      <AdvisorDialog open={advisorOpen} onClose={() => setAdvisorOpen(false)} alloc={alloc} total={cash} onApply={(a) => { setAdvisorOpen(false); requireWallet({ kind: "rebalance", initial: a }); }} />
+      <TransferDialog flow={flow} cash={availableCash} investedCapital={investedCapital} walletBalance={walletBalance} terms={terms} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onRebalanceToCash={() => setFlow({ kind: "rebalance", initial: CASH_ONLY })} onClose={() => setFlow(null)} onNotice={showNotice}
+        onDeposit={(n, net, strategyAlloc, strategyName) => {
+          if (!wallet) return requireWallet(flow);
+          setFlow(null);
+          const nextTotal = cents(portfolioTotal + n);
+          const targetCash = cents((nextTotal * strategyAlloc.Cash) / 100);
+          const targetCloud = cents((nextTotal * strategyAlloc.Cloud) / 100);
+          const targetDigital = cents(nextTotal - targetCash - targetCloud);
+          const reference = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, {
+            status: "pending", transactionType: "deposit", vaultId: strategyName, settlementTier: "Clearing",
+            feeBreakdown: { network: null, depvest: 0 },
+            balanceDeltas: { wallet: -n, liquid: cents(targetCash - liquidCash), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
+          });
+          showNotice(`Deposit of ${fmt(n)} with ${strategyName} is pending clearing`);
+          settleEntry(reference, () => {}, `Deposit of ${fmt(n)} with ${strategyName} confirmed`);
+        }}
+        onWithdraw={(n, net, fee) => {
+          if (!wallet) return requireWallet(flow);
+          if (n > availableCash) return showNotice("Withdrawal exceeds withdrawable liquid cash.");
+          setFlow(null);
+          const reference = addEntry("USDC withdrawal", `-${fmt(n)}`, `${net} • ${stamp()}`, "digital", ArrowDownToLine, {
+            status: "pending", transactionType: "withdrawal", vaultId: "Connected wallet", settlementTier: net.includes("Instant") ? "Express" : "Standard T+1",
+            feeBreakdown: { network: null, depvest: fee },
+            balanceDeltas: { wallet: n - fee, liquid: -n, cloud: 0, digital: 0 },
+          });
+          showNotice(`Withdrawal of ${fmt(n)} is pending clearing`);
+          settleEntry(reference, () => {}, `Withdrawal of ${fmt(n)} confirmed`);
+        }} />
+      <RebalanceDialog open={flow?.kind === "rebalance"} alloc={allocationTotal === 0 ? CASH_ONLY : alloc} initial={flow?.kind === "rebalance" ? flow.initial ?? null : null} targetVault={flow?.kind === "rebalance" ? flow.targetVault ?? null : null} total={portfolioTotal} rebalanceFee={terms.fees.rebalance} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onSave={(a) => {
+        if (!wallet) return requireWallet(flow);
+        if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+        const weightTotal = a.Cash + a.Cloud + a.Digital;
+        if (weightTotal <= 0) return;
+        const targetCash = cents((portfolioTotal * a.Cash) / weightTotal);
+        const targetCloud = cents((portfolioTotal * a.Cloud) / weightTotal);
+        const targetDigital = cents(portfolioTotal - targetCash - targetCloud);
+        const moved = cents((Math.abs(targetCash - liquidCash) + Math.abs(targetCloud - cloudHoldings) + Math.abs(targetDigital - digitalHoldings)) / 2);
+        addEntry("Portfolio rebalanced", `${fmt(moved)} reallocated`, `Target mix updated • ${stamp()}`, "cloud", RefreshCw, {
+          transactionType: "rebalance", vaultId: "Cash + strategy vaults", settlementTier: "Settled internally",
+          balanceDeltas: { wallet: 0, liquid: cents(targetCash - liquidCash), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
+        });
+        setFlow(null);
+        showNotice("Portfolio rebalance settled");
+      }} />
+      <AdvisorDialog open={advisorOpen} onClose={() => setAdvisorOpen(false)} alloc={alloc} total={portfolioTotal} onApply={(a) => { setAdvisorOpen(false); requireWallet({ kind: "rebalance", initial: a }); }} />
       <CalculatorDialog open={flow?.kind === "calculator"} onClose={() => setFlow(null)} onInvest={(amount, target) => {
         const strategyName: DepositStrategyName = target.Cloud >= 60 ? "Aggressive Tech" : target.Cash >= 60 ? "Conservative Haven" : "Balanced Yield";
         requireWallet({ kind: "deposit", initialAmount: amount, initialAlloc: target, initialStrategy: strategyName });
       }} />
       <TaskDialog flow={flow} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onComplete={async (title, reward) => {
         if (!wallet) return requireWallet(flow);
-        const entropy = crypto.getRandomValues(new Uint8Array(32));
-        const receiptPayload = new TextEncoder().encode(`${title}|${reward}|${WALLET_ADDRESS}|${Date.now()}|${Array.from(entropy).join(",")}`);
-        const digest = await crypto.subtle.digest("SHA-256", receiptPayload);
-        const reference = `0x${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
         setFlow(null);
-        const id = addEntry(`AI task payout · ${title}`, `+${fmt(reward)}`, `${WALLET_ADDRESS} · ${stamp()}`, "task", Zap, { status: "pending", vaultId: "AI Task Work", settlementTier: "Instant verification · gas-free Base", reference });
-        setCash((current) => current + reward);
+        const reference = addEntry(`AI task payout · ${title}`, `+${fmt(reward)}`, `${WALLET_ADDRESS} · ${stamp()}`, "task", Zap, {
+          status: "pending", transactionType: "task-payout", vaultId: "AI Task Work", settlementTier: "Clearing",
+          balanceDeltas: { wallet: 0, liquid: reward, cloud: 0, digital: 0 },
+        });
         setEarned((current) => current + reward);
         setTasksDone((current) => current + 1);
         showNotice(`Task payout of ${fmt(reward)} credited; settlement pending`);
-        settleEntry(id, () => {}, `Task payout of ${fmt(reward)} confirmed`);
+        settleEntry(reference, () => {}, `Task payout of ${fmt(reward)} confirmed`);
       }} />
-      <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc)).find((v) => v.name === flow.name) ?? null) : null} onClose={() => setFlow(null)} onNotice={showNotice} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
-      <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => { setWallet(w); setWalletBalance(1240.16); setConnectOpen(false); const requestedFlow = pendingFlow; setPendingFlow(null); if (requestedFlow?.kind === "task") { setTasksStarted((current) => current + 1); setStartedTaskTitles((current) => [...current, requestedFlow.title]); } if (requestedFlow) setFlow(requestedFlow); showNotice(`${WALLET_ADDRESS} connected on Base network`); }} />
+      <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc, portfolioTotal, { Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings })).find((v) => v.name === flow.name) ?? null) : null} unallocatedCash={availableCash} onClose={() => setFlow(null)} onAllocate={(name) => setAction(`Allocate Cash: ${name}`)} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
+      <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => {
+        if (!ledger.some((entry) => entry.transactionType === "wallet-snapshot")) {
+          addEntry("External wallet balance snapshot", `+${fmt(STARTING_WALLET_BALANCE)}`, `Connected wallet balance • ${stamp()}`, "cash", WalletCards, {
+            transactionType: "wallet-snapshot", settlementTier: "Settled snapshot", vaultId: "Connected external wallet",
+            balanceDeltas: { wallet: STARTING_WALLET_BALANCE, liquid: 0, cloud: 0, digital: 0 },
+          });
+        }
+        setWallet(w);
+        setConnectOpen(false);
+        const requestedFlow = pendingFlow;
+        setPendingFlow(null);
+        if (requestedFlow) setFlow(requestedFlow);
+        showNotice(`${WALLET_ADDRESS} connected on Base network`);
+      }} />
       <ProfileSheet
         open={profileOpen}
         onOpenChange={setProfileOpen}
@@ -492,12 +625,12 @@ function NavButton({ item, active, onClick }: { item: (typeof navItems)[number];
   return <button onClick={onClick} className={cn("flex h-8 items-center gap-2 rounded-full px-4 text-xs transition-colors", active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}><Icon className="size-3.5" />{item.label}</button>;
 }
 
-function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total, idleCash, showIdleBanner, rows }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; alloc: Alloc; total: number; idleCash: number; showIdleBanner: boolean; rows: typeof activity; terms: Terms }) {
+function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total, idleCash, showIdleBanner, rows, balances }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; alloc: Alloc; total: number; idleCash: number; showIdleBanner: boolean; rows: ActivityRow[]; balances: Record<"Cash" | "Cloud" | "Digital", number>; terms: Terms }) {
   return (
     <>
       <PortfolioSummary onAction={onAction} alloc={alloc} total={total} />
       {total > 0 && idleCash > 0 && showIdleBanner && <section className="mt-4 flex flex-col gap-4 rounded-[14px] border border-success/35 bg-success/10 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-sm font-semibold">You have {usd(idleCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">Allocations update your target distribution. Returns are variable and not guaranteed.</p></div>
+        <div><p className="text-sm font-semibold">You have {usd(idleCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">A confirmed rebalance moves funds between liquid cash and vault holdings. Returns are variable and not guaranteed.</p></div>
         <Button className="shrink-0 rounded-full" onClick={() => onAction("Rebalance")}>Deploy to Vaults <ArrowUpRight /></Button>
       </section>}
       {total === 0 && <section aria-label="Activate your account" className="mt-4 rounded-[14px] border border-border bg-card p-5">
@@ -511,7 +644,7 @@ function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total,
         <section>
           <SectionLabel title="Asset Vaults" right={`4 vaults · ${usd(total)} total`} />
           <TooltipProvider>
-            <div className="space-y-4">{vaults.map((vault) => <VaultCard key={vault.name} vault={withTerms(vault, terms, alloc, total)} onAction={onAction} onNotice={onNotice} idleCash={idleCash} />)}</div>
+            <div className="space-y-4">{vaults.map((vault) => <VaultCard key={vault.name} vault={withTerms(vault, terms, alloc, total, balances)} onAction={onAction} onNotice={onNotice} idleCash={idleCash} />)}</div>
           </TooltipProvider>
           <div className="mt-4 flex items-center gap-3 rounded-md border border-dashed border-border bg-card/40 p-4 text-xs text-muted-foreground">
             <Sparkles className="size-4 shrink-0" /><span className="min-w-0">Add a new vault? Explore private credit & DePIN coming soon.</span>
@@ -698,10 +831,31 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
   );
 }
 
-function Invest({ onAction, terms }: { onAction: (value: string) => void; terms: Terms }) {
+function Invest({ onAction, terms, unallocatedCash, total, alloc, balances }: { onAction: (value: string) => void; terms: Terms; unallocatedCash: number; total: number; alloc: Alloc; balances: Record<"Cash" | "Cloud" | "Digital", number> }) {
   const [query, setQuery] = useState("");
-  const visible = vaults.map((v) => withTerms(v, terms)).filter((vault) => vault.name.toLowerCase().includes(query.toLowerCase()));
-  return <section><PageIntro eyebrow="Vault Marketplace" title="Put every dollar to work." copy="Compare verified yield strategies across cash, compute, and digital assets." /><div className="mb-6 flex items-center gap-3 rounded-md border border-border bg-card px-4"><Search className="size-4 text-muted-foreground"/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search vaults" className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" /></div><div className="grid gap-4 md:grid-cols-2">{visible.map((vault) => <article key={vault.name} className="rounded-[14px] border border-border bg-card p-6"><div className="flex justify-between"><span className={cn("vault-icon", `accent-${vault.accent}`)}><vault.icon className="size-5" /></span><Badge accent={vault.accent}>{vault.risk}</Badge></div><h2 className="mt-6 text-lg font-semibold">{vault.name}</h2><p className="mt-2 text-xs text-muted-foreground">{vault.detail}</p><p className="mt-7 font-mono text-3xl">{vault.rate} <span className="text-xs text-muted-foreground">{vault.rateLabel}</span></p><div className="mt-6 flex items-center justify-between border-t border-border pt-5"><span className="text-[10px] text-muted-foreground">{vault.terms}</span><Button size="sm" className="rounded-full" onClick={() => onAction(`Invest in ${vault.name}`)}>Explore <ArrowUpRight /></Button></div></article>)}</div></section>;
+  const visible = vaults.map((v) => withTerms(v, terms, alloc, total, balances)).filter((vault) => vault.name.toLowerCase().includes(query.toLowerCase()));
+  return (
+    <section>
+      <PageIntro eyebrow="Vault Marketplace" title="Put every dollar to work." copy="Compare verified yield strategies across cash, compute, and digital assets." />
+      {unallocatedCash > 0 && <div className="mb-6 flex flex-col gap-4 rounded-[14px] border border-success/35 bg-success/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-sm font-semibold">You have {usd(unallocatedCash)} in unallocated cash ready to deploy</p><p className="mt-1 text-xs text-muted-foreground">Move liquid cash into your existing strategy mix or choose a vault below.</p></div>
+        <Button className="shrink-0 rounded-full" onClick={() => onAction("Deploy Available Cash")}>Deploy / Allocate <ArrowUpRight /></Button>
+      </div>}
+      <div className="mb-6 flex items-center gap-3 rounded-md border border-border bg-card px-4"><Search className="size-4 text-muted-foreground"/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search vaults" className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" /></div>
+      <div className="grid gap-4 md:grid-cols-2">{visible.map((vault) => (
+        <article key={vault.name} className="rounded-[14px] border border-border bg-card p-6">
+          <div className="flex justify-between"><span className={cn("vault-icon", `accent-${vault.accent}`)}><vault.icon className="size-5" /></span><Badge accent={vault.accent}>{vault.risk}</Badge></div>
+          <h2 className="mt-6 text-lg font-semibold">{vault.name}</h2><p className="mt-2 text-xs text-muted-foreground">{vault.detail}</p>
+          <p className="mt-7 font-mono text-3xl">{vault.rate} <span className="text-xs text-muted-foreground">{vault.rateLabel}</span></p>
+          <div className="mt-5 rounded-md border border-border bg-background/40 p-3"><Label>Current allocated balance</Label><p className="mt-1 font-mono text-sm">{vault.accent === "task" ? "No capital required" : vault.balance === "$0.00" ? "$0.00 allocated" : <>{vault.balance} <span className="text-[10px] text-muted-foreground">· {vault.allocation}</span></>}</p></div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5"><span className="text-[10px] text-muted-foreground">{vault.terms}</span><div className="flex gap-2">
+            {unallocatedCash > 0 && vault.accent !== "task" && <Button size="sm" className="rounded-full bg-success text-primary-foreground hover:bg-success/90" onClick={() => onAction(`Allocate Cash: ${vault.name}`)}>Allocate Cash</Button>}
+            <Button size="sm" variant="outline" className="rounded-full" onClick={() => onAction(`Invest in ${vault.name}`)}>Explore <ArrowUpRight /></Button>
+          </div></div>
+        </article>
+      ))}</div>
+    </section>
+  );
 }
 
 function ActiveEarn({
@@ -813,19 +967,30 @@ function ActiveEarn({
   );
 }
 
-function WalletLedger({ rows, cash, earned, onAction, onReceipt, wallet, onConnect }: { rows: typeof activity; cash: number; earned: number; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
-  return <section><PageIntro eyebrow="Wallet & Ledger" title="Every movement, accounted for." copy="Review balances, yields, and verified portfolio transactions in one place." />
+function WalletLedger({ rows, cash, settledLiquidCash, pendingWithdrawals, investedCapital, walletBalance, earned, onAction, onReceipt, wallet, onConnect }: { rows: ActivityRow[]; cash: number; settledLiquidCash: number; pendingWithdrawals: number; investedCapital: number; walletBalance: number; earned: number; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
+  return <section><PageIntro eyebrow="Wallet & Ledger" title="Every movement, accounted for." copy="Review your connected wallet, withdrawable cash, locked vault holdings, and ledger receipts in one place." />
     <div className="mb-5 flex flex-col gap-3 rounded-[14px] border border-border bg-card p-5 sm:flex-row sm:items-center">
       <span className="vault-icon accent-cash shrink-0"><WalletCards className="size-5" /></span>
       <div className="min-w-0 flex-1">{wallet ? <><p className="text-sm font-semibold">{wallet} connected</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{WALLET_ADDRESS} · Base network</p></> : <><p className="text-sm font-semibold">No wallet connected</p><p className="mt-1 text-[11px] text-muted-foreground">Connect a wallet to deposit and receive payouts.</p></>}</div>
       <div className="grid grid-cols-2 gap-2 sm:flex">{wallet ? <><Button className="rounded-full" onClick={() => onAction("Deposit funds")}><Plus />Deposit</Button><Button variant="outline" className="rounded-full" onClick={() => onAction("Withdraw funds")}><ArrowDownToLine />Withdraw</Button></> : <Button className="col-span-2 rounded-full bg-success text-primary-foreground hover:bg-success/90" onClick={onConnect}><WalletCards />Connect Wallet</Button>}</div>
     </div>
-    <div className="grid gap-4 sm:grid-cols-3 sm:gap-5"><WalletStat label="Available cash" value={`$${cash.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<WalletCards />} /><WalletStat label="Pending yield" value="—" note="Accrues once funds are allocated to a vault with a verified rate" icon={<Activity />} /><WalletStat label="Total earned" value={`$${earned.toFixed(2)}`} icon={<BarChart3 />} /></div><div className="mt-6 rounded-[14px] border border-border bg-card"><div className="border-b border-border p-5"><div className="min-w-0"><h2 className="text-sm font-semibold">Transaction ledger</h2><p className="mt-1 text-[10px] text-muted-foreground">Tap an entry to view its receipt</p></div></div><LedgerFilters rows={rows} onReceipt={onReceipt} /></div></section>;
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 sm:gap-5">
+      <WalletStat label="Connected wallet" value={wallet ? usd(walletBalance) : "Not connected"} note="External USDC balance" icon={<WalletCards />} />
+      <WalletStat label="Withdrawable cash" value={usd(cash)} note="Settled liquid balance less pending withdrawals" icon={<CircleDollarSign />} />
+      <WalletStat label="Invested in vaults · locked" value={usd(investedCapital)} note="Rebalance to liquid cash before withdrawing" icon={<LockKeyhole />} />
+      <WalletStat label="Total earned" value={usd(earned)} note="Accepted Active Earn and referral rewards" icon={<BarChart3 />} />
+    </div>
+    <div className="mt-4 rounded-md border border-success/25 bg-success/5 p-4 text-xs leading-relaxed">
+      <p className="font-medium">Ledger reconciliation</p>
+      <p className="mt-1 text-muted-foreground">The ledger tracks the external wallet separately from DepVest liquid cash and locked vault holdings. Clearing withdrawals reserve liquid cash until settlement. This session ledger is local to this dashboard session.</p>
+      <p className="mt-2 font-mono text-[10px] text-muted-foreground">External wallet {usd(wallet ? walletBalance : 0)} · DepVest: withdrawable {usd(cash)} + withdrawal reserve {usd(pendingWithdrawals)} = settled liquid {usd(settledLiquidCash)}; + locked vaults {usd(investedCapital)} = portfolio {usd(settledLiquidCash + investedCapital)}</p>
+    </div>
+    <div className="mt-6 rounded-[14px] border border-border bg-card"><div className="border-b border-border p-5"><div className="min-w-0"><h2 className="text-sm font-semibold">Transaction ledger</h2><p className="mt-1 text-[10px] text-muted-foreground">Each entry has a unique reference, timestamp, fee breakdown, and clearing status. Tap an entry to view its receipt.</p></div></div><LedgerFilters rows={rows} onReceipt={onReceipt} /></div></section>;
 }
 
 const LEDGER_TYPES = ["All", "Deposits", "Withdrawals", "Tasks", "Referrals", "Rebalances"] as const;
 const LEDGER_RANGES = ["All Time", "Today", "Last 7 Days", "Last 30 Days", "Custom"] as const;
-const LEDGER_STATUSES = ["All Status", "Pending", "Completed"] as const;
+const LEDGER_STATUSES = ["All Status", "Clearing", "Settled"] as const;
 const typeOf = (t: string) => /deposit/i.test(t) ? "Deposits" : /withdraw/i.test(t) ? "Withdrawals" : /task|payout/i.test(t) ? "Tasks" : /referral/i.test(t) ? "Referrals" : /rebalanc/i.test(t) ? "Rebalances" : "Other";
 const localDayStart = (value: string) => {
   const [year, month, day] = value.split("-").map(Number);
@@ -835,7 +1000,7 @@ const localDayEnd = (value: string) => {
   const start = localDayStart(value);
   return start == null ? null : start + 24 * 60 * 60 * 1000 - 1;
 };
-function LedgerFilters({ rows, onReceipt }: { rows: typeof activity; onReceipt: (r: Receipt) => void }) {
+function LedgerFilters({ rows, onReceipt }: { rows: ActivityRow[]; onReceipt: (r: Receipt) => void }) {
   const [type, setType] = useState<(typeof LEDGER_TYPES)[number]>("All");
   const [range, setRange] = useState<(typeof LEDGER_RANGES)[number]>("All Time");
   const [status, setStatus] = useState<(typeof LEDGER_STATUSES)[number]>("All Status");
@@ -852,7 +1017,7 @@ function LedgerFilters({ rows, onReceipt }: { rows: typeof activity; onReceipt: 
     (customStart == null || r.timestamp >= customStart) &&
     (customEnd == null || r.timestamp <= customEnd) &&
     (type === "All" || typeOf(r.title) === type) &&
-    (status === "All Status" || r.status === status.toLowerCase()) &&
+    (status === "All Status" || (status === "Clearing" ? r.status === "pending" : r.status === "completed")) &&
     (r.title + " " + r.meta + " " + r.value).toLowerCase().includes(q.trim().toLowerCase()),
   );
   const hasActiveFilters = range !== "All Time" || type !== "All" || status !== "All Status" || !!from || !!to || !!q.trim();
@@ -874,7 +1039,7 @@ function LedgerFilters({ rows, onReceipt }: { rows: typeof activity; onReceipt: 
   </div>
   {rows.length === 0 && <p className="p-8 text-center text-xs text-muted-foreground">No transactions yet. Make a deposit to get started.</p>}
   {rows.length > 0 && list.length === 0 && <p className="p-8 text-center text-xs text-muted-foreground">No transactions match the selected date range and filters.</p>}
-  {list.map((item) => <button key={item.id} onClick={() => onReceipt(item)} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-5 py-4 text-left last:border-0 hover:bg-secondary/30 sm:gap-4"><span className={cn("vault-icon size-8", `accent-${item.accent}`)}><item.icon className="size-4" /></span><div className="min-w-0"><p className="truncate text-xs font-medium">{item.title}</p><p className="mt-1 truncate text-[9px] text-muted-foreground">{new Date(item.timestamp).toLocaleString()} · {item.meta}</p><span className={cn("mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]", item.status === "pending" ? "bg-warning/15 text-warning" : item.status === "failed" ? "bg-destructive/15 text-destructive" : "bg-success/10 text-success")}>{item.status === "pending" ? <i className="size-1.5 animate-pulse rounded-full bg-warning" /> : item.status === "failed" ? "●" : "✓"} {item.status === "pending" ? "Pending Clearing" : item.status === "failed" ? "Failed" : "Completed"}</span></div><span className={cn("font-mono text-xs", item.value.startsWith("-") ? "text-muted-foreground" : "text-success")}>{item.value}</span></button>)}</>;
+  {list.map((item) => <button key={item.id} onClick={() => onReceipt(item)} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-5 py-4 text-left last:border-0 hover:bg-secondary/30 sm:gap-4"><span className={cn("vault-icon size-8", `accent-${item.accent}`)}><item.icon className="size-4" /></span><div className="min-w-0"><p className="truncate text-xs font-medium">{item.title}</p><p className="mt-1 truncate text-[9px] text-muted-foreground">{new Date(item.timestamp).toLocaleString()} · {item.meta}</p><span className={cn("mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]", item.status === "pending" ? "bg-warning/15 text-warning" : item.status === "failed" ? "bg-destructive/15 text-destructive" : "bg-success/10 text-success")}>{item.status === "pending" ? <i className="size-1.5 animate-pulse rounded-full bg-warning" /> : item.status === "failed" ? "●" : "✓"} {item.status === "pending" ? "Clearing" : item.status === "failed" ? "Failed" : "Settled"}</span></div><span className={cn("font-mono text-xs", item.value.startsWith("-") ? "text-muted-foreground" : "text-success")}>{item.value}</span></button>)}</>;
 }
 
 function AllocationBar({ alloc }: { alloc: Alloc }) { return <div className="flex h-2 gap-1 overflow-hidden rounded-full bg-secondary p-0.5"><span className="bar-cash rounded-full" style={{ width: `${alloc.Cash}%` }}/><span className="bar-cloud rounded-full" style={{ width: `${alloc.Cloud}%` }}/><span className="bar-digital rounded-full" style={{ width: `${alloc.Digital}%` }}/><span className="bar-task rounded-full" style={{ width: `${alloc.Task}%` }}/></div>; }
@@ -888,12 +1053,14 @@ function ProgressRow({ label, value }: { label: string; value: string }) { retur
 function WalletStat({ label, value, icon, note }: { label: string; value: string; icon: ReactNode; note?: string }) { return <div className="rounded-[14px] border border-border bg-card p-6"><span className="vault-icon accent-cash">{icon}</span><p className="mt-6 text-xs text-muted-foreground">{label}</p><p className="mt-2 font-mono text-2xl">{value}</p>{note && <p className="mt-1 text-[10px] text-muted-foreground">{note}</p>}</div>; }
 const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function withTerms<T extends (typeof vaults)[number]>(v: T, terms: Terms, alloc?: Alloc, total = 0): T {
+function withTerms<T extends (typeof vaults)[number]>(v: T, terms: Terms, alloc?: Alloc, total = 0, balances?: Record<"Cash" | "Cloud" | "Digital", number>): T {
   const key = v.accent === "cash" ? "Cash" : v.accent === "cloud" ? "Cloud" : v.accent === "digital" ? "Digital" : null;
   const rate = key ? pct(terms.apy[key]) : rewardRange(terms.taskReward);
   const a = alloc ? alloc[key ?? "Task"] : 0;
-  const balance = key && total ? `$${((total * a) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : v.balance;
-  return { ...v, rate, allocation: `${a}%`, balance };
+  const amount = key ? balances?.[key] ?? (total * a) / 100 : 0;
+  const balance = key ? usd(amount) : "$0.00";
+  const allocation = key && total > 0 ? `${Math.round((amount / total) * 100)}%` : `${a}%`;
+  return { ...v, rate, allocation, balance };
 }
 function ringStyle(a: Alloc) {
   const c = a.Cash, d = c + a.Cloud, e = d + a.Digital;

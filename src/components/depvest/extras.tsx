@@ -51,6 +51,7 @@ function Intro({ eyebrow, title, copy }: { eyebrow: string; title: string; copy:
 const wallets = [
   { name: "MetaMask", note: "Browser extension", tag: "Popular" },
   { name: "Coinbase Wallet", note: "Mobile & extension", tag: "Base native" },
+  { name: "Ledger (Hardware Wallet)", note: "Connect a Ledger hardware device", tag: "Hardware wallet" },
   { name: "Phantom", note: "Multi-chain wallet", tag: "" },
   { name: "WalletConnect", note: "Scan with any mobile wallet", tag: "" },
 ];
@@ -249,6 +250,7 @@ export type Receipt = {
   reference?: string;
   vaultId?: string;
   settlementTier?: string;
+  feeBreakdown?: { network: number | null; depvest: number };
 } | null;
 
 export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt; onClose: () => void; onNotice: (m: string) => void }) {
@@ -263,13 +265,14 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
           <div className="space-y-4">
             <p className="font-mono text-3xl text-success">{receipt.value}</p>
             <dl className="space-y-2 rounded-md border border-border bg-background/40 p-4 text-xs">
-              <Row k="Status" v={receipt.status === "pending" ? <span className="text-warning">● Pending Clearing</span> : receipt.status === "failed" ? <span className="text-destructive">● Failed</span> : <span className="text-success">✓ Completed</span>} />
+              <Row k="Clearing status" v={receipt.status === "pending" ? <span className="text-warning">● Clearing</span> : receipt.status === "failed" ? <span className="text-destructive">● Failed</span> : <span className="text-success">✓ Settled</span>} />
               {receipt.timestamp != null && <Row k="Timestamp" v={new Date(receipt.timestamp).toLocaleString()} />}
               <Row k="Details" v={<span className="max-w-[60%] text-[11px]">{receipt.meta}</span>} />
               <Row k="Network" v="Base" />
               <Row k="Vault" v={receipt.vaultId ?? "DepVest vault"} />
               <Row k="Settlement tier" v={receipt.settlementTier ?? "Standard T+1"} />
-              <Row k={receipt.title.startsWith("AI task payout ·") ? "SHA-256 receipt" : "Tx reference"} v={<span className="break-all font-mono text-[10px]">{receipt.reference ?? "0x9f3c…e21a"}</span>} />
+              <Row k="Fee breakdown" v={<span className="text-right text-[10px]">DepVest: ${receipt.feeBreakdown?.depvest.toFixed(2) ?? "0.00"}<br />Network: {receipt.feeBreakdown?.network == null ? "Shown by wallet" : `$${receipt.feeBreakdown.network.toFixed(2)}`}</span>} />
+              <Row k="Unique reference ID" v={<span className="break-all font-mono text-[10px]">{receipt.reference ?? "Not recorded"}</span>} />
             </dl>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" onClick={() => onNotice("Receipt copied")}><Copy />Copy</Button>

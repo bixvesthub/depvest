@@ -65,7 +65,7 @@ const steps = [
   {
     icon: WalletCards,
     title: "Connect & fund",
-    copy: "Connect a supported self-custody wallet (MetaMask, Coinbase Wallet, WalletConnect) on Base or Ethereum, then deposit USDC. Every deposit, withdrawal, rebalance, and task requires a connected wallet.",
+    copy: "Connect MetaMask, Coinbase Wallet, Ledger (Hardware Wallet), WalletConnect, or another listed wallet on Base or Ethereum, then deposit USDC. Every deposit, withdrawal, rebalance, and task requires a connected wallet.",
   },
   {
     icon: Scale,
@@ -80,7 +80,7 @@ const steps = [
   {
     icon: ArrowDownToLine,
     title: "Track & withdraw",
-    copy: "Review balances and every receipt in the Wallet & Ledger. Withdraw with Standard settlement (free, T+1) or Instant settlement (1.5% fee). Network gas is paid from your wallet.",
+    copy: "Review balances and every receipt in the session ledger. Withdraw settled liquid cash with Standard settlement (free, T+1) or Instant settlement (1.5% fee). Invested vault funds must be rebalanced to liquid cash first. Network gas is paid from your wallet.",
   },
 ];
 const yieldSources = [
@@ -116,9 +116,11 @@ export function HowItWorks({ terms, onStart }: { terms: Terms; onStart: () => vo
       <Card className="mb-6 border-warning/30 bg-warning/5">
         <h2 className="text-sm font-semibold">Wallet and transaction status</h2>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Deposits, withdrawals, rebalances, and task payouts appear in your ledger as Clearing
-          until they settle. Always confirm the amount, network, and fees in your wallet before
-          signing, and treat a transaction as final only once it shows as Settled.
+          Deposits, withdrawals, rebalances, Active Earn payouts, and referral claims receive a
+          unique reference ID, timestamp, fee breakdown, and clearing status in the append-only
+          session ledger. Clearing transfers do not change settled balances until a settlement
+          event is recorded. Always confirm amount, network, and fees in your wallet before
+          signing. Session ledger entries are local to this dashboard session.
         </p>
       </Card>
       <h2 className="mb-3 text-base font-semibold">Strategy overview</h2>
@@ -231,12 +233,22 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Account & access",
       q: "How do I connect a wallet?",
-      a: "Tap Connect Wallet and choose MetaMask, Coinbase Wallet, or WalletConnect. Deposits, withdrawals, rebalances, and tasks require a connected wallet. Never share your seed phrase.",
+      a: "Tap Connect Wallet and choose MetaMask, Coinbase Wallet, Ledger (Hardware Wallet), or WalletConnect. Deposits, withdrawals, rebalances, and tasks require a connected wallet. Never share your seed phrase.",
     },
     {
       category: "Deposits & withdrawals",
       q: "How are deposits and withdrawals recorded?",
-      a: "Each deposit and withdrawal is recorded in your ledger as Clearing, then Settled. Confirm amounts and fees in your wallet before signing.",
+      a: "Deposits, withdrawals, rebalances, Active Earn payouts, and referral claims receive a unique reference ID, timestamp, fee breakdown, balance deltas, and clearing status in the append-only session ledger. Clearing entries affect balances only after a settlement event.",
+    },
+    {
+      category: "Deposits & withdrawals",
+      q: "Can I withdraw funds invested in a vault?",
+      a: "Vault funds cannot be withdrawn directly. Rebalance the portfolio to the Liquid Cash Only 100% Cash preset, wait for it to settle, then withdraw the resulting liquid cash. Max in the withdrawal flow uses liquid cash only.",
+    },
+    {
+      category: "Ledger & accounting",
+      q: "How does the ledger reconcile my balances?",
+      a: "Settled session ledger entries are the source of truth for external wallet, available liquid cash, and locked vault balances. Clearing transactions remain pending, and fee details and references are available from each receipt. The ledger is local to the current dashboard session.",
     },
     {
       category: "Strategies & yield",
@@ -411,7 +423,7 @@ export function Rules({ terms }: { terms: Terms }) {
       items: [
         "Deposits, withdrawals, rebalances, and tasks require a connected wallet on a supported network (Base or Ethereum).",
         "Minimum deposit: none currently set — this is an unconfirmed estimate, not an established term.",
-        "Ledger entries show Clearing until settled; a Clearing entry is not final.",
+        "External transfers and payouts show Clearing until settled; internal rebalances are recorded as Settled.",
         "Do not send funds to an address unless it is confirmed through a verified official product flow.",
       ],
     },
@@ -426,18 +438,37 @@ export function Rules({ terms }: { terms: Terms }) {
     {
       t: "Allocations and rebalancing",
       items: [
-        "Allocation selections express a target mix and do not by themselves execute a trade or transfer.",
-        "Presets: Conservative 75/15/10, Balanced 40/35/25, Aggressive 10/65/25, or Liquid Cash Only.",
+        "A confirmed rebalance moves the settled local ledger balance between liquid cash and strategy vault holdings.",
+        "Presets: Conservative 75/15/10, Balanced 40/35/25, Aggressive 10/65/25, or Liquid Cash Only at 100% cash.",
         "Target allocations do not ensure diversification, liquidity, or a particular result.",
       ],
     },
     {
-      t: "Withdrawals and settlement",
+      t: "Strategy Liquidity Rules",
+      items: [
+        "Withdrawable Liquid Cash is separate from capital invested in Compute and Digital strategy vaults.",
+        "Invested vault funds are locked for direct withdrawal and cannot be used by Max.",
+        "To withdraw invested funds, rebalance the portfolio to Liquid Cash Only (100% Cash), wait for the rebalance to settle, then submit a withdrawal.",
+        "The withdrawal dialog offers a Rebalance to Liquid Cash shortcut when liquid cash is zero or too low.",
+      ],
+    },
+    {
+      t: "Withdrawals & Settlement",
       items: [
         "Standard settlement is free and settles T+1.",
         "Instant settlement carries a 1.5% fee, deducted from the amount received.",
-        "Withdrawals cannot exceed Available Cash; pending withdrawals are held until settled.",
+        "Withdrawals cannot exceed settled Withdrawable Liquid Cash; pending withdrawals are reserved until settled.",
+        "Invested vault funds cannot be withdrawn directly; rebalance them to liquid cash first.",
         "Payout timing (daily Treasury compounding, 30-day compute epochs, 7-day digital unstaking) is an unconfirmed estimate, not an established term.",
+      ],
+    },
+    {
+      t: "Ledger accounting",
+      items: [
+        "Every deposit, withdrawal, rebalance, Active Earn payout, and referral claim receives an immutable entry with a unique reference ID, timestamp, fee breakdown, balance deltas, and clearing status.",
+        "Settlement is recorded as a separate append-only event; settled ledger entries are the source of truth for wallet, liquid cash, and locked vault balances in this dashboard session.",
+        "Clearing entries do not change settled balances. Ledger receipts and exported statements include the reference and fee breakdown.",
+        "Session entries are held in local React state and do not persist after the dashboard session ends.",
       ],
     },
     {
@@ -445,14 +476,14 @@ export function Rules({ terms }: { terms: Terms }) {
       items: [
         "Tasks pay $0.10–$0.30 each when accepted, depending on task type.",
         "A task is accepted only at 70% accuracy or higher.",
-        "Up to five task attempts per session, one attempt per task type; limits reset each session.",
+        "Up to five task attempts per session, one attempt per task type; limits reset each session and duplicate task attempts are blocked.",
       ],
     },
     {
       t: "Referral program",
       items: [
         "Each connected wallet gets a personal code (DV-XXXXXX); self-referrals are not accepted.",
-        "A referral counts only after the friend registers successfully and activates their account.",
+        "A referral counts only after the friend registers successfully and activates their account; a claim can be submitted only once for the available claim balance.",
         "Estimated tiers: 5% (1+ friend), 10% (3+), 15% (10+). These rates are unconfirmed estimates, not established terms. Claimed rewards move to Available Cash.",
       ],
     },

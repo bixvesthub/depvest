@@ -68,8 +68,23 @@ export const DEFAULT_TERMS: Terms = {
     },
     {
       category: "Deposits & withdrawals",
-      q: "Which networks and currencies are supported?",
-      a: "DepVest supports USDC on Base and Ethereum. Gas is paid in your wallet. Always confirm the network in your wallet before signing.",
+      q: "Can I withdraw invested vault funds directly?",
+      a: "No. Withdrawals can use settled liquid cash only. Funds invested in strategy vaults are locked for direct withdrawal; first rebalance the portfolio to the Liquid Cash Only 100% Cash preset, wait for the rebalance to settle, then withdraw the liquid balance.",
+    },
+    {
+      category: "Deposits & withdrawals",
+      q: "What happens if I do not have enough liquid cash to withdraw?",
+      a: "The withdrawal flow limits Max to withdrawable cash and blocks amounts above that balance. Use Rebalance to Liquid Cash to open the rebalance flow with the 100% Cash preset selected. Invested funds cannot be withdrawn directly.",
+    },
+    {
+      category: "Ledger & accounting",
+      q: "How does the DepVest ledger account for transactions?",
+      a: "Each deposit, withdrawal, rebalance, Active Earn payout, and referral claim is recorded as an append-only session ledger entry with a unique reference ID, timestamp, fee breakdown, balance deltas, and clearing status. Settlement is recorded as a separate event. Settled entries are the source of truth for external wallet, liquid cash, and locked vault balances in this dashboard session; clearing entries do not change settled balances.",
+    },
+    {
+      category: "Deposits & withdrawals",
+      q: "Which wallets and networks are supported?",
+      a: "Wallet connection options include MetaMask, Coinbase Wallet, Ledger (Hardware Wallet), Phantom, and WalletConnect. The dashboard supports USDC on Base and Ethereum. Gas is paid in your wallet. Always confirm the network in your wallet before signing.",
     },
     {
       category: "Active Earn",
@@ -104,7 +119,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Referrals",
       q: "How do I claim referral rewards?",
-      a: "Use Claim to Cash on the Invite Friends page. Claimed rewards move into your Available Cash and appear in your ledger.",
+      a: "Use Claim to Cash on the Invite Friends page. Claimable rewards are reserved when a claim is submitted, so repeat taps cannot claim the same balance twice. Each claim receives a unique ledger reference and clearing status before it moves into Available Cash.",
     },
     {
       category: "Strategies & yield",
