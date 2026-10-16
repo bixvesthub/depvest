@@ -360,7 +360,7 @@ function DepVestApp() {
           onClaim={claimReferralRewards}
         />}
         {view === "How It Works" && <HowItWorks terms={terms} onStart={() => go("Invest")} />}
-        {view === "Q&A" && <FAQ terms={terms} onSupport={() => go("Support")} />}
+        {view === "Q&A" && <FAQ key={faqQuery} terms={terms} initialQuery={faqQuery} onSupport={() => go("Support")} />}
         {view === "About" && <About />}
         {view === "Rules" && <Rules terms={terms} />}
         {view === "Support" && <Support onNotice={showNotice} onFaq={(topic) => { setFaqQuery(topic ?? ""); go("Q&A"); }} />}

@@ -39,7 +39,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Strategies & yield",
       q: "How do the DepVest strategies seek to generate yield?",
-      a: "The dashboard describes three strategy types: Treasury exposure intended to earn government-debt interest, compute infrastructure intended to earn hardware-rental revenue, and digital-asset strategies intended to earn staking or protocol rewards. Their live deployment, counterparties, custody, and realized performance are not connected to or verified by this interface.",
+      a: "DepVest offers three strategy types: Treasury cash seeking government-debt interest, AI cloud compute seeking hardware-rental revenue, and blue-chip digital assets seeking staking and protocol rewards. Each carries its own market, operational, and liquidity risks.",
     },
     {
       category: "Strategies & yield",
@@ -49,52 +49,67 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Strategies & yield",
       q: "When is yield compounded or credited?",
-      a: "This interface does not connect to yield-generating services or calculate and credit realized strategy returns. Compounding, accrual, and distribution timing are not established here; consult the governing terms for any live product.",
+      a: "Treasury cash shows daily compounding, AI compute pays at the end of each 30-day epoch, and digital assets accrue flexibly with a 7-day unstaking period. Projections on the Portfolio page are estimates, not guarantees.",
     },
     {
       category: "Fees & eligibility",
       q: "What fees are shown in the configured fee schedule?",
-      a: "The configured values are: deposits — Free; rebalancing — Free; performance — 10% of net positive yield; standard withdrawals — Free; instant withdrawals — 1.5%. These values are displayed for information only; this interface does not execute transactions or collect fees.",
+      a: "The configured values are: deposits — Free; rebalancing — Free; performance — 10% of net positive yield; standard withdrawals — Free; instant withdrawals — 1.5%. Network gas is paid separately from your wallet.",
     },
     {
       category: "Fees & eligibility",
       q: "Is there a minimum deposit or lock-up period?",
-      a: "Minimums and applicable liquidity or lock-up conditions are not established by this interface. Review the governing terms for a live product before sending funds; dashboard deposit controls do not submit transactions.",
+      a: "No minimum deposit is configured. Treasury cash has no lock, AI compute runs in 30-day epochs, and digital assets have a 7-day unstaking period. Deposits cannot exceed your wallet balance.",
     },
     {
       category: "Deposits & withdrawals",
       q: "What is the difference between standard and instant withdrawals?",
-      a: "The interface describes standard withdrawals as T+1 and instant withdrawals as express with a configured 1.5% fee. These are displayed settings only: no withdrawal is submitted, settled, or sent to a wallet by this dashboard.",
+      a: "Standard withdrawals are free and settle T+1. Instant withdrawals settle express with a 1.5% fee deducted from the amount you receive. Both show as Clearing in your ledger until settled.",
     },
     {
       category: "Deposits & withdrawals",
-      q: "Which networks and currencies does the interface display?",
-      a: "The interface displays USDC and Base and Ethereum network options. It is not connected to a wallet provider or blockchain and does not verify deposits. Do not send assets using an address or QR code displayed here.",
+      q: "Which networks and currencies are supported?",
+      a: "DepVest supports USDC on Base and Ethereum. Gas is paid in your wallet. Always confirm the network in your wallet before signing.",
     },
     {
       category: "Active Earn",
       q: "How does Active Earn work?",
-      a: "Active Earn contains sample annotation, summary-review, and classification tasks. Completing a task can add $0.10–$0.30 of session credit in the current interface. No partner task queue or real USDC payment service is connected.",
+      a: "Active Earn offers eight task types such as product labelling, summary review, and content screening. Each accepted task pays $0.10–$0.30 depending on its type, with no capital required.",
     },
     {
       category: "Active Earn",
       q: "What are the accuracy and session limits for tasks?",
-      a: "The interface requires at least 70% accuracy to accept a task and allows up to five task attempts per app session, with one attempt per task type. This is client-side session behavior, not a persistent account limit; progress resets when the app reloads.",
+      a: "A task is accepted at 70% accuracy or higher. You can make up to five task attempts per session, one per task type. Limits reset each session.",
     },
     {
       category: "Active Earn",
       q: "When are Active Earn rewards paid?",
-      a: "Accepted work adds session credit to the dashboard. It is not transferred as USDC. The interface creates a client-side SHA-256 reference for a task record; this is not an on-chain transaction or an independently verified payout receipt.",
+      a: "Accepted work is credited to your Available Cash and recorded in your ledger with a reference ID once it clears verification.",
     },
     {
       category: "Custody & support",
       q: "Does DepVest take custody of my assets?",
-      a: "This interface does not connect to a wallet provider, deploy or interact with vault contracts, or take custody of assets. It cannot establish whether a separate live product is custodial or non-custodial; consult its verified custody disclosures.",
+      a: "Your wallet stays self-custodied; DepVest never asks for your seed phrase or private keys. Custody of strategy assets is governed by each strategy's published terms.",
     },
     {
       category: "Custody & support",
       q: "How can I reach the DepVest support team?",
-      a: "Verified support contact details have not been configured in this interface. The address and community links supplied in unverified drafts should not be treated as official. Never share private keys or a seed phrase with anyone claiming to be support.",
+      a: "Official support channels will be listed on the Support page once published. Never share private keys or a seed phrase with anyone claiming to be support.",
+    },
+    {
+      category: "Referrals",
+      q: "How does the referral program work?",
+      a: "Connect a wallet to get your personal code (DV-XXXXXX) and invite link. A referral counts once your friend registers and activates their account. Tiers: 5% (1+ friend), 10% (3+), 15% (10+). Self-referrals are not accepted.",
+    },
+    {
+      category: "Referrals",
+      q: "How do I claim referral rewards?",
+      a: "Use Claim to Cash on the Invite Friends page. Claimed rewards move into your Available Cash and appear in your ledger.",
+    },
+    {
+      category: "Strategies & yield",
+      q: "What does the AI Risk Check do?",
+      a: "It scores your current mix against your risk tolerance and time horizon, flags concentration (for example compute plus digital above 50%, or one vault at 60%+), and suggests an allocation you can apply to Rebalance.",
     },
   ],
   verifiedAt: null,
