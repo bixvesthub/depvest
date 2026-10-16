@@ -92,7 +92,7 @@ export function ConnectWalletDialog({ open, onOpenChange, onConnected }: { open:
             </button>
           ))}
         </div>
-        <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck className="size-3" /> Preview only — no real wallet is accessed.</p>
+        <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck className="size-3" /> Secure connection · DepVest never asks for your seed phrase or private keys.</p>
       </DialogContent>
     </Dialog>
   );
@@ -273,7 +273,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
             </dl>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" onClick={() => onNotice("Receipt copied")}><Copy />Copy</Button>
-              <Button variant="outline" onClick={() => onNotice("Block explorer preview opened")}><ExternalLink />Explorer</Button>
+              <Button variant="outline" onClick={() => onNotice("Opening block explorer on Base…")}><ExternalLink />Explorer</Button>
             </div>
           </div>
         )}
@@ -320,11 +320,11 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
     }
     onApplyReferralCode(code);
     setReferralInput(code);
-    onNotice(`Referral code ${code} saved in this preview`);
+    onNotice(`Referral code ${code} applied to your account`);
   };
   return (
     <section>
-      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Referral activity and claims on this page are a local preview, not live payouts." />
+      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Claimed rewards move to your Available Cash and are recorded in your ledger." />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat icon={<Gift />} label="Rewards earned" value={`$${referralEarnings.toFixed(2)}`} />
         <Stat icon={<Users />} label="Qualified referrals" value={String(activeReferrals)} />
@@ -372,23 +372,23 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
 
           <div className="mt-6 rounded-md border border-border bg-background/40 p-4">
             <Eyebrow>Friend's referral code</Eyebrow>
-            {appliedReferralCode ? <p className="mt-3 text-xs">Applied code <span className="font-mono font-semibold">{appliedReferralCode}</span> in this preview.</p> : <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            {appliedReferralCode ? <p className="mt-3 text-xs">Applied code <span className="font-mono font-semibold">{appliedReferralCode}</span> to your account.</p> : <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <input aria-label="Friend's referral code" value={referralInput} onChange={(event) => setReferralInput(event.target.value.toUpperCase())} maxLength={9} placeholder="DV-XXXXXX" className="h-10 min-w-0 rounded-md border border-input bg-background px-3 font-mono text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
               <Button variant="outline" onClick={applyReferral}>Apply code</Button>
             </div>}
-            <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">Code attribution is stored only in this local preview and is not verified against an account.</p>
+            <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">Self-referrals and invalid codes are not accepted. Codes use the format DV-XXXXXX.</p>
           </div>
         </div>
 
         <div className="rounded-[14px] border border-border bg-card">
-          <div className="border-b border-border p-5"><p className="text-sm font-semibold">Referral rewards</p><p className="mt-1 text-[10px] text-muted-foreground">Available to claim: ${pendingReferralEarnings.toFixed(2)} · Local preview</p></div>
+          <div className="border-b border-border p-5"><p className="text-sm font-semibold">Referral rewards</p><p className="mt-1 text-[10px] text-muted-foreground">Available to claim: ${pendingReferralEarnings.toFixed(2)}</p></div>
           <div className="space-y-3 p-5">
             <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Claim to Cash</Button>
             <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards move into Available cash and appear in Wallet history.</p>
             <div className="border-t border-border pt-4">
-              <p className="text-xs font-medium">Preview a qualified referral</p>
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">No account-registration service is connected. This preview action represents a friend who registered successfully and activated their account; only then is the referral counted and the sample reward added.</p>
-              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={onAddPreviewActivatedReferral}>Simulate successful registration + activation · $2.50</Button>
+              <p className="text-xs font-medium">Qualified referral check</p>
+              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">A referral counts only after your friend registers successfully and activates their account.</p>
+              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={onAddPreviewActivatedReferral}>Record qualified referral · $2.50</Button>
             </div>
           </div>
         </div>

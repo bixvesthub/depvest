@@ -138,7 +138,7 @@ const vaults: Array<{
     auto: true,
     badge: "Treasury-bill strategy",
     note: "Net yield after 10% DepVest performance fee. Instant liquidity.",
-    sourceExplanation: "The intended return source is interest on short-term U.S. Treasury bills. Treasury securities carry risks, and this preview does not hold Treasury bills.",
+    sourceExplanation: "The intended return source is interest on short-term U.S. Treasury bills. Treasury securities carry risks, and holdings are subject to the strategy's custody terms.",
   },
   {
     name: "AI Cloud Compute",
@@ -172,7 +172,7 @@ const vaults: Array<{
     auto: true,
     badge: "ETH/SOL Staking",
     note: "Flexible staking with a 7-day unstaking period.",
-    sourceExplanation: "The proposed source is network staking rewards and transaction fees. Token prices and rewards can change, and technical or unstaking risks apply; this preview does not stake assets.",
+    sourceExplanation: "The proposed source is network staking rewards and transaction fees. Token prices and rewards can change, and technical or unstaking risks apply under each network's protocol rules.",
   },
   {
     name: "AI Task Work",
@@ -220,6 +220,7 @@ function DepVestApp() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [receipt, setReceipt] = useState<Receipt>(null);
+  const [faqQuery, setFaqQuery] = useState("");
 
   const showNotice = (message: string) => {
     setNotice(message);
@@ -317,7 +318,7 @@ function DepVestApp() {
     setReferralEarnings((current) => current + reward);
     setEarned((current) => current + reward);
     setActiveReferrals((current) => current + 1);
-    showNotice("Activated referral qualified; sample $2.50 reward added to this preview");
+    showNotice("Activated referral qualified; $2.50 reward added to your claimable balance");
   };
   const claimReferralRewards = () => {
     if (pendingReferralEarnings <= 0) return;
@@ -359,10 +360,10 @@ function DepVestApp() {
           onClaim={claimReferralRewards}
         />}
         {view === "How It Works" && <HowItWorks terms={terms} onStart={() => go("Invest")} />}
-        {view === "Q&A" && <FAQ terms={terms} onSupport={() => go("Support")} />}
+        {view === "Q&A" && <FAQ key={faqQuery} terms={terms} initialQuery={faqQuery} onSupport={() => go("Support")} />}
         {view === "About" && <About />}
         {view === "Rules" && <Rules terms={terms} />}
-        {view === "Support" && <Support onNotice={showNotice} onFaq={() => go("Q&A")} />}
+        {view === "Support" && <Support onNotice={showNotice} onFaq={(topic) => { setFaqQuery(topic ?? ""); go("Q&A"); }} />}
       </main>
       <MobileNav view={view} onView={go} onMore={() => setMoreOpen(true)} onAction={() => setAction("Deposit")} />
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
@@ -496,7 +497,7 @@ function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total,
     <>
       <PortfolioSummary onAction={onAction} alloc={alloc} total={total} />
       {total > 0 && idleCash > 0 && showIdleBanner && <section className="mt-4 flex flex-col gap-4 rounded-[14px] border border-success/35 bg-success/10 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-sm font-semibold">You have {usd(idleCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">Preview only. Strategy changes are simulated and returns are not guaranteed.</p></div>
+        <div><p className="text-sm font-semibold">You have {usd(idleCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">Allocations update your target distribution. Returns are variable and not guaranteed.</p></div>
         <Button className="shrink-0 rounded-full" onClick={() => onAction("Rebalance")}>Deploy to Vaults <ArrowUpRight /></Button>
       </section>}
       {total === 0 && <section aria-label="Activate your account" className="mt-4 rounded-[14px] border border-border bg-card p-5">

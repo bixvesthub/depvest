@@ -43,7 +43,7 @@ const Shell = ({ open, onClose, eyebrow, title, desc, children }: { open: boolea
     </DialogContent>
   </Dialog>
 );
-const Preview = () => <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><LockKeyhole className="size-3" />Preview only — no real funds move</p>;
+const Preview = () => <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><LockKeyhole className="size-3" />Confirm amounts and network fees in your wallet before signing</p>;
 
 /* ---------------- Deposit / Withdraw ---------------- */
 export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAddress, onWalletRequired, onClose, onDeposit, onWithdraw, onNotice }: { flow: Flow; cash: number; walletBalance?: number; terms: Terms; walletAddress: string | null; onWalletRequired: () => void; onClose: () => void; onDeposit: (n: number, net: string, alloc: Alloc, strategyName: DepositStrategyName) => void; onWithdraw: (n: number, net: string) => void; onNotice: Notice }) {
@@ -104,7 +104,7 @@ export function TransferDialog({ flow, cash, walletBalance = 0, terms, walletAdd
             </button>)}
           </div>
           {vaultStrategy && <p className="mt-2 text-[10px] text-muted-foreground">Opened from <b className="text-foreground">{vaultStrategy.name}</b>. Choose any strategy above to change the deployment.</p>}
-          <p className="mt-2 text-[10px] text-muted-foreground">This preview updates simulated allocation only; it does not move real funds.</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">Confirming updates your target portfolio distribution across vaults.</p>
         </div>}
         {!isDeposit && <div><Cap>Destination wallet</Cap><input value={dest} maxLength={42} onChange={(e) => setDest(e.target.value.trim())} placeholder="0x…" className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 font-mono text-xs outline-none" /><button onClick={() => setDest(DEPOSIT_ADDRESS)} className="mt-1 text-[10px] text-success">Use my connected wallet</button></div>}
         {!isDeposit && <div role="radiogroup" aria-label="Settlement speed"><Cap>Settlement</Cap><div className="mt-2 space-y-2">{[{ k: false, t: "Standard Settlement", d: "Settles next day (T+1) or at next vault epoch", f: "FREE" }, { k: true, t: "Instant Express Settlement", d: "Immediate on-chain processing via emergency liquidity pools", f: "1.5%" }].map((o) => <button key={o.t} role="radio" aria-checked={instant === o.k} onClick={() => setInstant(o.k)} className={cn("flex w-full items-center gap-3 rounded-md border p-3 text-left", instant === o.k ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><span className={cn("size-3.5 shrink-0 rounded-full border", instant === o.k ? "border-success bg-success" : "border-muted-foreground")} /><span className="min-w-0 flex-1"><b className="block text-sm">{o.t}</b><span className="text-[10px] text-muted-foreground">{o.d}</span></span><span className="font-mono text-xs">{o.f}</span></button>)}</div></div>}

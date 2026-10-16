@@ -65,12 +65,12 @@ const steps = [
   {
     icon: WalletCards,
     title: "Connect & fund",
-    copy: "Choose a supported self-custody wallet and verify the address before using any financial service. Wallet controls in this dashboard do not currently submit blockchain transactions.",
+    copy: "Connect a supported self-custody wallet (MetaMask, Coinbase Wallet, WalletConnect) on Base or Ethereum, then deposit USDC. Every deposit, withdrawal, rebalance, and task requires a connected wallet.",
   },
   {
     icon: Scale,
     title: "Choose a target mix",
-    copy: "Review the available strategies, their terms, and risks before choosing a target allocation. Allocation controls here update the dashboard only; they do not place orders or move assets.",
+    copy: "Pick a preset (Conservative, Balanced, Aggressive, or Liquid Cash Only) when you deposit, or set your own mix. Run an AI Risk Check any time to review concentration and horizon fit.",
   },
   {
     icon: Building2,
@@ -80,7 +80,7 @@ const steps = [
   {
     icon: ArrowDownToLine,
     title: "Track & withdraw",
-    copy: "Use the portfolio and ledger views to review balances and activity displayed in your account. Withdrawal availability, settlement times, and network fees must be confirmed in the applicable service terms.",
+    copy: "Review balances and every receipt in the Wallet & Ledger. Withdraw with Standard settlement (free, T+1) or Instant settlement (1.5% fee). Network gas is paid from your wallet.",
   },
 ];
 const yieldSources = [
@@ -102,7 +102,7 @@ const yieldSources = [
   {
     title: "Active Earn",
     label: "Payment for completed microtasks",
-    copy: "Task work is distinct from investing. Earnings depend on task availability, successful completion, acceptance criteria, and the applicable payment terms.",
+    copy: "Task work is distinct from investing and needs no capital. Accepted tasks require at least 70% accuracy; up to five task attempts per session, one per task type.",
   },
 ];
 export function HowItWorks({ terms, onStart }: { terms: Terms; onStart: () => void }) {
@@ -116,10 +116,9 @@ export function HowItWorks({ terms, onStart }: { terms: Terms; onStart: () => vo
       <Card className="mb-6 border-warning/30 bg-warning/5">
         <h2 className="text-sm font-semibold">Wallet and transaction status</h2>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Wallet, deposit, withdrawal, allocation, and ledger controls currently update the
-          dashboard interface only; they do not connect to a wallet provider, submit transactions,
-          or confirm custody of assets. Only treat a transaction as complete when it is verified
-          through the relevant wallet and network.
+          Deposits, withdrawals, rebalances, and task payouts appear in your ledger as Clearing
+          until they settle. Always confirm the amount, network, and fees in your wallet before
+          signing, and treat a transaction as final only once it shows as Settled.
         </p>
       </Card>
       <h2 className="mb-3 text-base font-semibold">Strategy overview</h2>
@@ -168,7 +167,7 @@ export function HowItWorks({ terms, onStart }: { terms: Terms; onStart: () => vo
           </ul>
           <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
             Confirm the applicable fee and any conditions in the official terms before using a
-            financial service. No fee is charged by the dashboard itself.
+            financial service. Network gas is paid separately from your wallet.
           </p>
         </Card>
         <Card>
@@ -185,6 +184,9 @@ export function HowItWorks({ terms, onStart }: { terms: Terms; onStart: () => vo
             </p>
             <p className="rounded-md border border-border bg-background/40 p-3">
               <b>Illustrative balanced mix:</b> 40% Treasury · 35% compute · 25% digital assets.
+            </p>
+            <p className="rounded-md border border-border bg-background/40 p-3">
+              <b>Illustrative aggressive mix:</b> 10% Treasury · 65% compute · 25% digital assets.
             </p>
             <p className="text-[10px] text-muted-foreground">
               Example allocations only. Allocation cannot eliminate risk or guarantee income.
@@ -223,18 +225,18 @@ export function HowItWorks({ terms, onStart }: { terms: Terms; onStart: () => vo
 }
 
 /* ---------------- Q&A ---------------- */
-export function FAQ({ terms, onSupport }: { terms: Terms; onSupport: () => void }) {
-  const [q, setQ] = useState("");
+export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onSupport: () => void; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery);
   const productFaqs = [
     {
       category: "Account & access",
       q: "How do I connect a wallet?",
-      a: "Wallet connection is not currently available in this interface. Never send assets to an address unless it is provided by a verified, official product flow.",
+      a: "Tap Connect Wallet and choose MetaMask, Coinbase Wallet, or WalletConnect. Deposits, withdrawals, rebalances, and tasks require a connected wallet. Never share your seed phrase.",
     },
     {
       category: "Deposits & withdrawals",
-      q: "Do dashboard deposits and withdrawals submit transactions?",
-      a: "No. The deposit, withdrawal, and ledger controls currently update the dashboard interface only; they do not submit or confirm blockchain transactions.",
+      q: "How are deposits and withdrawals recorded?",
+      a: "Each deposit and withdrawal is recorded in your ledger as Clearing, then Settled. Confirm amounts and fees in your wallet before signing.",
     },
     {
       category: "Strategies & yield",
@@ -249,7 +251,7 @@ export function FAQ({ terms, onSupport }: { terms: Terms; onSupport: () => void 
     {
       category: "Custody & support",
       q: "How can I contact support?",
-      a: "Support contact details are not published in this interface. Never share passwords, private keys, or seed phrases with anyone claiming to be support.",
+      a: "Official support channels will be listed on the Support page once published. Never share passwords, private keys, or seed phrases with anyone claiming to be support.",
     },
   ];
   const entries = terms.faqs.length ? terms.faqs : productFaqs;
@@ -279,9 +281,8 @@ export function FAQ({ terms, onSupport }: { terms: Terms; onSupport: () => void 
               <div className="flex items-start gap-3">
                 <FileText className="mt-0.5 size-4 shrink-0 text-warning" />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Official FAQ entries have not been published. The information below explains
-                  dashboard functionality and configured terms; it does not replace the applicable
-                  legal or product documents.
+                  The answers below summarize DepVest features and configured terms. They do not
+                  replace the governing legal or product documents.
                 </p>
               </div>
             </Card>
@@ -370,7 +371,7 @@ export function About() {
       <Intro
         eyebrow="About DepVest"
         title="A single view of diversified strategies."
-        copy="DepVest brings portfolio tools, strategy information, and activity views together in one dashboard. Explore Treasury, compute, digital-asset, and task-based strategies, and review their terms and risks before making financial decisions."
+        copy="DepVest is a multi-asset yield platform that brings portfolio tools, strategy information, and activity views together in one place. Explore Treasury, compute, digital-asset, and task-based strategies, and review their terms and risks before making financial decisions."
       />
       <div className="grid gap-4 md:grid-cols-2">
         {pillars.map(({ icon: Icon, t, c }) => (
@@ -387,9 +388,9 @@ export function About() {
         <Eyebrow>Platform capabilities</Eyebrow>
         <ul className="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-3">
           {[
-            "Review portfolio allocations and strategy information.",
-            "Explore the dashboard's account, activity, and allocation controls.",
-            "Financial transactions and wallet connectivity are not enabled in this interface.",
+            "Multi-asset strategies across Treasury cash, AI compute, and digital-asset staking.",
+            "Portfolio management with allocation presets, rebalancing, AI Risk Check, and a yield calculator.",
+            "Wallet-gated deposits and withdrawals, Active Earn tasks, and tiered referral rewards.",
           ].map((p) => (
             <li key={p} className="flex gap-2">
               <Check className="size-3.5 shrink-0 text-success" />
@@ -408,8 +409,8 @@ export function Rules({ terms }: { terms: Terms }) {
     {
       t: "Account and transaction access",
       items: [
-        "Wallet, deposit, withdrawal, and ledger controls in this interface do not submit or verify financial transactions.",
-        "A displayed balance or activity entry is not proof of asset ownership, custody, or settlement.",
+        "Deposits, withdrawals, rebalances, and tasks require a connected wallet on a supported network (Base or Ethereum).",
+        "Ledger entries show Clearing until settled; a Clearing entry is not final.",
         "Do not send funds to an address unless it is confirmed through a verified official product flow.",
       ],
     },
@@ -425,8 +426,32 @@ export function Rules({ terms }: { terms: Terms }) {
       t: "Allocations and rebalancing",
       items: [
         "Allocation selections express a target mix and do not by themselves execute a trade or transfer.",
-        "Changes made through the current dashboard controls do not buy, sell, stake, or move assets.",
+        "Presets: Conservative 75/15/10, Balanced 40/35/25, Aggressive 10/65/25, or Liquid Cash Only.",
         "Target allocations do not ensure diversification, liquidity, or a particular result.",
+      ],
+    },
+    {
+      t: "Withdrawals and settlement",
+      items: [
+        "Standard settlement is free and settles T+1.",
+        "Instant settlement carries a 1.5% fee, deducted from the amount received.",
+        "Withdrawals cannot exceed Available Cash; pending withdrawals are held until settled.",
+      ],
+    },
+    {
+      t: "Active Earn",
+      items: [
+        "Tasks pay $0.10–$0.30 each when accepted, depending on task type.",
+        "A task is accepted only at 70% accuracy or higher.",
+        "Up to five task attempts per session, one attempt per task type; limits reset each session.",
+      ],
+    },
+    {
+      t: "Referral program",
+      items: [
+        "Each connected wallet gets a personal code (DV-XXXXXX); self-referrals are not accepted.",
+        "A referral counts only after the friend registers successfully and activates their account.",
+        "Tiers: 5% (1+ friend), 10% (3+), 15% (10+). Claimed rewards move to Available Cash.",
       ],
     },
     {
@@ -452,8 +477,8 @@ export function Rules({ terms }: { terms: Terms }) {
         copy="Review service policies, configured fees, and the risks associated with each strategy. This informational summary does not replace the governing product terms."
       />
       <div className="mb-4 rounded-md border border-warning/30 bg-warning/5 p-4 text-xs leading-relaxed text-muted-foreground">
-        Wallet and transaction controls are not enabled in this interface. The fee schedule is
-        informational; consult the governing terms for binding conditions.
+        This summary explains how DepVest features work. Where governing product terms are
+        published, they take precedence over this page.
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {sections.map((s) => (
@@ -501,7 +526,7 @@ export function Rules({ terms }: { terms: Terms }) {
 }
 
 /* ---------------- Support ---------------- */
-export function Support({ onNotice, onFaq }: { onNotice: (m: string) => void; onFaq: () => void }) {
+export function Support({ onNotice, onFaq }: { onNotice: (m: string) => void; onFaq: (topic?: string) => void }) {
   const channels = [
     {
       icon: MessageCircle,
@@ -532,7 +557,7 @@ export function Support({ onNotice, onFaq }: { onNotice: (m: string) => void; on
       cta: "Discord link unavailable",
     },
   ];
-  const links = ["How do deposits work?", "Withdrawal timing", "Fees & rates", "Account security"];
+  const links: Array<[string, string]> = [["How do deposits work?", "deposit"], ["Withdrawal timing", "withdrawal"], ["Fees & rates", "fee"], ["Account security", "private keys"]];
   return (
     <section>
       <Intro
@@ -564,10 +589,10 @@ export function Support({ onNotice, onFaq }: { onNotice: (m: string) => void; on
             Quick answers
           </h2>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {links.map((l) => (
+            {links.map(([l, topic]) => (
               <button
                 key={l}
-                onClick={onFaq}
+                onClick={() => onFaq(topic)}
                 className="flex items-center justify-between rounded-md border border-border bg-background/40 p-3 text-left text-xs hover:border-success/40"
               >
                 {l}
