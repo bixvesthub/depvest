@@ -574,7 +574,7 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:gap-5 sm:px-6 lg:px-8">
         <button className="flex min-w-0 shrink-0 items-center gap-3" onClick={() => onView("Portfolio")} aria-label="Open portfolio">
-          <img src="/depvestlogo-icon.svg" alt="" className="size-9 shrink-0 rounded-md shadow-glow" />
+          <img src="/depvestlogo.png" alt="" className="size-9 shrink-0 rounded-md object-contain shadow-glow" />
           <span className="text-base font-semibold">DepVest</span>
           <span className="hidden rounded border border-border px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-muted-foreground 2xl:inline">Multi-Asset Hub</span>
         </button>
