@@ -70,7 +70,7 @@ export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance 
   const dvFee = isDeposit ? terms.fees.deposit : instant ? `${money(fee)} (1.5% express)` : "Free (standard)";
   const withdrawalExceedsCash = !isDeposit && n > cash;
   const withdrawalNeedsRebalance = !isDeposit && (cash <= 0 || withdrawalExceedsCash);
-  const error = n <= 0 ? "Enter an amount" : n > 1_000_000 ? "Maximum is $1,000,000" : isDeposit && walletAddress && n > walletBalance ? `Wallet holds only ${money(walletBalance)} USDC` : withdrawalExceedsCash ? `Only ${money(cash)} withdrawable cash is available` : !isDeposit && !/^0x[a-fA-F0-9]{40}$/.test(dest.trim()) ? "Enter a valid 0x wallet address (42 characters)" : "";
+  const error = n <= 0 ? "Enter an amount" : n > 10_000_000 ? "Maximum is $10,000,000" : isDeposit && walletAddress && n > walletBalance ? `Wallet holds only ${money(walletBalance)} USDC` : withdrawalExceedsCash ? `Only ${money(cash)} withdrawable cash is available` : !isDeposit && !/^0x[a-fA-F0-9]{40}$/.test(dest.trim()) ? "Enter a valid 0x wallet address (42 characters)" : "";
   const submit = () => {
     if (error || busy) return;
     if (!walletAddress) { onWalletRequired(); return; }
@@ -93,9 +93,9 @@ export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance 
           <div className="mt-2 flex items-center gap-2"><code className="min-w-0 flex-1 truncate font-mono text-[11px]">{DEPOSIT_ADDRESS}</code><Button size="sm" variant="outline" className="rounded-full" onClick={() => { navigator.clipboard?.writeText(DEPOSIT_ADDRESS).catch(() => {}); onNotice(`Deposit: USDC ${net} address copied`); }}><Copy />Copy</Button></div>
         </div>}
         <div><Cap>Amount (USDC)</Cap>
-          <div className="mt-2 flex items-center rounded-md border border-input bg-background px-4"><span className="text-muted-foreground">$</span><input inputMode="decimal" maxLength={10} value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} className="h-12 w-full bg-transparent px-2 font-mono text-lg outline-none" /></div>
+          <div className="mt-2 flex items-center rounded-md border border-input bg-background px-4"><span className="text-muted-foreground">$</span><input inputMode="decimal" maxLength={12} value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} className="h-12 w-full bg-transparent px-2 font-mono text-lg outline-none" /></div>
           {walletAddress && <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground"><span>{isDeposit ? "Wallet balance" : "Withdrawable cash"}: <b className="font-mono text-foreground">{money(isDeposit ? walletBalance : cash)} USDC</b></span>{!isDeposit && <span>Wallet: <span className="font-mono">{money(walletBalance)}</span></span>}</div>}
-          <div className="mt-2 flex flex-wrap gap-2">{(isDeposit ? [250, 1000] : [100, 250]).map((p) => <button key={p} onClick={() => setAmount(String(p))} className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px]">{money(p)}</button>)}<button onClick={() => setAmount(String(Math.floor((isDeposit ? walletBalance : cash) * 100) / 100))} className="rounded-full bg-success/15 px-3 py-1 font-mono text-[10px] text-success">Max</button></div>
+          <div className="mt-2 flex flex-wrap gap-2">{(isDeposit ? [1000, 10000, 50000] : [100, 250, 1000]).map((p) => <button key={p} onClick={() => setAmount(String(p))} className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px]">{money(p)}</button>)}<button onClick={() => setAmount(String(Math.floor((isDeposit ? walletBalance : cash) * 100) / 100))} className="rounded-full bg-success/15 px-3 py-1 font-mono text-[10px] text-success">Max</button></div>
         </div>
         {isDeposit && <div>
           <div className="flex items-center justify-between gap-2"><Cap>Deployment Strategy</Cap><span className="text-[9px] text-muted-foreground">Applied when deposit settles</span></div>

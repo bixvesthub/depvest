@@ -201,7 +201,7 @@ const vaults: Array<{
 
 const activity: ActivityRow[] = [];
 const TASK_SESSION_LIMIT = 5;
-const STARTING_WALLET_BALANCE = 1240.16;
+const STARTING_WALLET_BALANCE = 250000;
 const CASH_ONLY: Alloc = { Cash: 100, Cloud: 0, Digital: 0, Task: 0 };
 const cents = (amount: number) => Math.round(amount * 100) / 100;
 const makeReference = () => {
