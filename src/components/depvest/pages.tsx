@@ -1,11 +1,14 @@
-import { useState, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowDownToLine,
+  AtSign,
   BookOpen,
   Building2,
   Check,
   Clock,
+  Copy,
+  ExternalLink,
   FileText,
   HelpCircle,
   LifeBuoy,
@@ -28,6 +31,13 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { pct, rewardRange, UNCONFIGURED, type Terms } from "./terms";
 
@@ -263,7 +273,7 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Custody & support",
       q: "How can I contact support?",
-      a: "Official support channels will be listed on the Support page once published. Never share passwords, private keys, or seed phrases with anyone claiming to be support.",
+      a: `Reach support at ${terms.support.primaryEmail}, message ${terms.support.telegram.handle} on Telegram, or join ${terms.support.discord.label}. ${terms.support.securityMandate}`,
     },
   ];
   const entries = terms.faqs.length ? terms.faqs : productFaqs;
@@ -342,8 +352,8 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
           </span>
           <p className="mt-5 text-sm font-semibold">Still have questions?</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Support contact details have not been configured. See the Support page for current
-            information.
+            Email {terms.support.primaryEmail}, message {terms.support.telegram.handle} on Telegram,
+            or join {terms.support.discord.label}. See the Support page for all official channels.
           </p>
           <Button className="mt-5 w-full rounded-full" onClick={onSupport}>
             Open Support
@@ -559,61 +569,124 @@ export function Rules({ terms }: { terms: Terms }) {
 }
 
 /* ---------------- Support ---------------- */
-export function Support({ onNotice, onFaq }: { onNotice: (m: string) => void; onFaq: (topic?: string) => void }) {
-  const channels = [
-    {
-      icon: MessageCircle,
-      t: "Live Chat",
-      c: "In-app conversation with a support team.",
-      sla: "Not available",
-      cta: "Live chat unavailable",
-    },
-    {
-      icon: Mail,
-      t: "Email",
-      c: "For account, deposit, and withdrawal questions.",
-      sla: "Contact details not published",
-      cta: "Email details unavailable",
-    },
-    {
-      icon: Send,
-      t: "Telegram",
-      c: "Official announcements and community help.",
-      sla: "Contact details not published",
-      cta: "Telegram link unavailable",
-    },
-    {
-      icon: MessagesSquare,
-      t: "Discord",
-      c: "Community discussion and product updates.",
-      sla: "Contact details not published",
-      cta: "Discord link unavailable",
-    },
-  ];
+const SUPPORT_TOPICS = [
+  "Deposits & Settlements",
+  "Strategy Vaults",
+  "Active Earn",
+  "Referral Rewards",
+  "General / Other",
+] as const;
+
+type SupportTicket = {
+  reference: string;
+  topic: string;
+  message: string;
+  walletAddress: string | null;
+};
+
+const createSupportReference = () =>
+  `TKT-${Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, "0")}`;
+
+export function Support({ terms, walletAddress, onNotice, onFaq }: { terms: Terms; walletAddress: string | null; onNotice: (m: string) => void; onFaq: (topic?: string) => void }) {
+  const [conversationOpen, setConversationOpen] = useState(false);
+  const [topic, setTopic] = useState<(typeof SUPPORT_TOPICS)[number]>("General / Other");
+  const [message, setMessage] = useState("");
+  const [ticket, setTicket] = useState<SupportTicket | null>(null);
+  const support = terms.support;
+
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(support.primaryEmail);
+      onNotice("Support email copied");
+    } catch {
+      onNotice("Could not copy the email. Select and copy it manually.");
+    }
+  };
+
+  const submitInquiry = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const inquiry = message.trim();
+    if (!inquiry) return;
+    setTicket({
+      reference: createSupportReference(),
+      topic,
+      message: inquiry,
+      walletAddress,
+    });
+  };
+
+  const telegramEscalation = ticket
+    ? `${support.telegram.url}?text=${encodeURIComponent(
+        `DEPVEST support request ${ticket.reference}\nTopic: ${ticket.topic}\n${ticket.message}${ticket.walletAddress ? `\nWallet: ${ticket.walletAddress}` : ""}`,
+      )}`
+    : "";
   const links: Array<[string, string]> = [["How do deposits work?", "deposit"], ["Withdrawal timing", "withdrawal"], ["Fees & rates", "fee"], ["Account security", "private keys"]];
   return (
     <section>
       <Intro
         eyebrow="Support"
         title="Get help with DepVest."
-        copy="Choose a published support channel when one is available. Contact details for chat, email, Telegram, and Discord have not been provided here. Never share your seed phrase or private keys with anyone claiming to be support."
+        copy="Reach the DEPVEST team through the official channels below. For your security, verify the account handle and never share wallet secrets."
       />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {channels.map(({ icon: Icon, t, c, sla, cta }) => (
-          <Card key={t} className="flex flex-col">
-            <span className="vault-icon accent-digital">
-              <Icon className="size-5" />
-            </span>
-            <h2 className="mt-5 text-sm font-semibold">{t}</h2>
-            <p className="mt-2 flex-1 text-xs text-muted-foreground">{c}</p>
-            <div className="mt-3">
-              <Unconfigured label={sla} />
-            </div>
-            <Button variant="outline" className="mt-4 rounded-full" disabled>
-              {cta}
-            </Button>
-          </Card>
-        ))}
+      <Card className="mb-5 border-warning/40 bg-warning/10">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-warning" />
+          <div>
+            <h2 className="text-sm font-semibold">Security &amp; Key Protection</h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{support.securityMandate}</p>
+          </div>
+        </div>
+      </Card>
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-3 py-1 text-[11px] font-medium text-success">
+          <span className="size-1.5 rounded-full bg-success" />
+          Online / {support.operatingHours.replace("Monday – Friday, ", "Mon–Fri ")}
+        </span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <Card className="flex flex-col">
+          <span className="vault-icon accent-digital"><Mail className="size-5" /></span>
+          <h2 className="mt-5 text-sm font-semibold">Email</h2>
+          <p className="mt-2 flex-1 text-xs text-muted-foreground">For account, deposit, settlement, and withdrawal questions.</p>
+          <p className="mt-3 break-all font-mono text-xs">{support.primaryEmail}</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">Alternate: {support.alternateEmail}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button asChild className="rounded-full"><a href={`mailto:${support.primaryEmail}`}><Mail />Send Email</a></Button>
+            <Button variant="outline" className="rounded-full" onClick={copyEmail}><Copy />Copy Email</Button>
+          </div>
+        </Card>
+        <Card className="flex flex-col">
+          <span className="vault-icon accent-digital"><Send className="size-5" /></span>
+          <h2 className="mt-5 text-sm font-semibold">Telegram</h2>
+          <p className="mt-2 flex-1 text-xs text-muted-foreground">Contact the DEPVEST team directly.</p>
+          <p className="mt-3 font-mono text-xs">{support.telegram.handle}</p>
+          <Button asChild variant="outline" className="mt-4 rounded-full"><a href={support.telegram.url} target="_blank" rel="noopener noreferrer"><ExternalLink />Join Telegram</a></Button>
+        </Card>
+        <Card className="flex flex-col">
+          <span className="vault-icon accent-digital"><MessagesSquare className="size-5" /></span>
+          <h2 className="mt-5 text-sm font-semibold">Discord</h2>
+          <p className="mt-2 flex-1 text-xs text-muted-foreground">Join the DEPVEST community.</p>
+          <p className="mt-3 font-mono text-xs">{support.discord.label}</p>
+          <Button asChild variant="outline" className="mt-4 rounded-full"><a href={support.discord.url} target="_blank" rel="noopener noreferrer"><ExternalLink />Open Discord</a></Button>
+        </Card>
+        <Card className="flex flex-col">
+          <span className="vault-icon accent-digital"><AtSign className="size-5" /></span>
+          <h2 className="mt-5 text-sm font-semibold">X / Twitter</h2>
+          <p className="mt-2 flex-1 text-xs text-muted-foreground">Follow official DEPVEST updates.</p>
+          <p className="mt-3 font-mono text-xs">{support.x.handle}</p>
+          <Button asChild variant="outline" className="mt-4 rounded-full"><a href={support.x.url} target="_blank" rel="noopener noreferrer"><ExternalLink />Follow on X</a></Button>
+        </Card>
+        <Card className="flex flex-col border-success/30 bg-success/5">
+          <span className="vault-icon accent-digital"><MessageCircle className="size-5" /></span>
+          <h2 className="mt-5 text-sm font-semibold">Live Chat</h2>
+          <p className="mt-2 flex-1 text-xs text-muted-foreground">Direct Specialist Support. Create a session reference and escalate through Telegram.</p>
+          <Button className="mt-4 rounded-full" onClick={() => {
+            setTicket(null);
+            setMessage("");
+            setTopic("General / Other");
+            setConversationOpen(true);
+          }}><MessageCircle />Start Conversation</Button>
+        </Card>
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_320px]">
         <Card>
@@ -639,18 +712,56 @@ export function Support({ onNotice, onFaq }: { onNotice: (m: string) => void; on
             <Clock className="size-4" />
             Response times
           </h2>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Support hours and response targets have not been published.
-          </p>
-          <div className="mt-3">
-            <Unconfigured label="Hours unconfigured" />
+          <p className="mt-3 text-xs text-muted-foreground">{support.operatingHours}</p>
+          <div className="mt-4 space-y-2">
+            <p className="rounded-md border border-border bg-background/40 p-3 text-xs">{support.responseSla.priority}</p>
+            <p className="rounded-md border border-border bg-background/40 p-3 text-xs">{support.responseSla.standard}</p>
           </div>
           <p className="mt-4 flex gap-2 text-[11px] text-muted-foreground">
             <LifeBuoy className="size-3.5 shrink-0 text-success" />
-            Never share your seed phrase with anyone.
+            Official team: {support.telegram.handle}. Never share wallet secrets.
           </p>
         </Card>
       </div>
+      <Dialog open={conversationOpen} onOpenChange={setConversationOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-border bg-popover sm:max-w-lg">
+          <DialogHeader className="text-left">
+            <Eyebrow>Direct Specialist Support</Eyebrow>
+            <DialogTitle className="text-xl">Start a conversation</DialogTitle>
+            <DialogDescription>Prepare your inquiry and get a session support reference to continue with {support.telegram.handle}.</DialogDescription>
+          </DialogHeader>
+          {ticket ? (
+            <div className="space-y-4">
+              <div className="rounded-md border border-success/30 bg-success/5 p-4">
+                <p className="text-xs text-muted-foreground">Session support reference</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-success">{ticket.reference}</p>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">Your inquiry and reference are held in this dashboard session. Continue to Telegram to send them to the support team.</p>
+              <Button asChild className="w-full rounded-full"><a href={telegramEscalation} target="_blank" rel="noopener noreferrer"><Send />Continue to Telegram</a></Button>
+              <Button variant="outline" className="w-full rounded-full" onClick={() => setTicket(null)}>Edit inquiry</Button>
+            </div>
+          ) : (
+            <form className="space-y-4" onSubmit={submitInquiry}>
+              <label className="block space-y-2 text-xs font-medium">
+                Topic
+                <select value={topic} onChange={(event) => setTopic(event.target.value as (typeof SUPPORT_TOPICS)[number])} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal">
+                  {SUPPORT_TOPICS.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </label>
+              <label className="block space-y-2 text-xs font-medium">
+                Message / inquiry
+                <textarea value={message} onChange={(event) => setMessage(event.target.value)} required rows={5} maxLength={2000} placeholder="Tell us what you need help with…" className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <div className="rounded-md border border-border bg-background/50 p-3 text-[11px]">
+                <p className="font-medium">Wallet address {walletAddress ? "attached" : "not connected"}</p>
+                <p className="mt-1 break-all font-mono text-muted-foreground">{walletAddress ?? "Connect a wallet to include its address with your inquiry."}</p>
+              </div>
+              <Button type="submit" className="w-full rounded-full" disabled={!message.trim()}><MessageCircle />Create support reference</Button>
+              <p className="text-[10px] leading-relaxed text-muted-foreground">This creates a local session reference only. Your inquiry is sent when you continue to Telegram.</p>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

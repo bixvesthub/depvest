@@ -445,7 +445,7 @@ function DepVestApp() {
         {view === "Q&A" && <FAQ key={faqQuery} terms={terms} initialQuery={faqQuery} onSupport={() => go("Support")} />}
         {view === "About" && <About />}
         {view === "Rules" && <Rules terms={terms} />}
-        {view === "Support" && <Support onNotice={showNotice} onFaq={(topic) => { setFaqQuery(topic ?? ""); go("Q&A"); }} />}
+        {view === "Support" && <Support terms={terms} walletAddress={wallet ? WALLET_ADDRESS : null} onNotice={showNotice} onFaq={(topic) => { setFaqQuery(topic ?? ""); go("Q&A"); }} />}
       </main>
       <MobileNav view={view} onView={go} onMore={() => setMoreOpen(true)} onAction={() => setAction("Deposit")} />
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>

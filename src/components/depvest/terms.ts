@@ -8,22 +8,48 @@ export type Terms = {
     performance: string | null;
     rebalance: string | null;
   };
+  support: {
+    primaryEmail: string;
+    alternateEmail: string;
+    telegram: { handle: string; url: string };
+    discord: { label: string; url: string };
+    x: { handle: string; url: string };
+    operatingHours: string;
+    responseSla: { priority: string; standard: string };
+    securityMandate: string;
+  };
   faqs: Array<{ category: string; q: string; a: string }>;
   verifiedAt: string | null;
-};
-
-export const EMPTY_TERMS: Terms = {
-  apy: { Cash: null, Cloud: null, Digital: null },
-  taskReward: null,
-  fees: { deposit: null, withdrawal: null, performance: null, rebalance: null },
-  faqs: [],
-  verifiedAt: null,
 };
 
 export const UNCONFIGURED = "Unconfigured";
 export const pct = (n: number | null) => (n == null ? UNCONFIGURED : `${n.toFixed(2)}%`);
 export const rewardRange = (r: Terms["taskReward"]) =>
   r ? `$${r.min.toFixed(2)} – $${r.max.toFixed(2)}` : UNCONFIGURED;
+
+export const DEFAULT_SUPPORT: Terms["support"] = {
+  primaryEmail: "support@depvest.com",
+  alternateEmail: "depvestteam@gmail.com",
+  telegram: { handle: "@depvestteam", url: "https://t.me/depvestteam" },
+  discord: { label: "discord.gg/depvestteam", url: "https://discord.gg/depvestteam" },
+  x: { handle: "@depvestteam", url: "https://x.com/depvestteam" },
+  operatingHours: "Monday – Friday, 08:00 – 20:00 UTC",
+  responseSla: {
+    priority: "Priority inquiries < 4 hours",
+    standard: "Standard inquiries < 24 hours",
+  },
+  securityMandate:
+    "The DEPVEST team (@depvestteam) will never ask for your seed phrase, private keys, or wallet passwords.",
+};
+
+export const EMPTY_TERMS: Terms = {
+  apy: { Cash: null, Cloud: null, Digital: null },
+  taskReward: null,
+  fees: { deposit: null, withdrawal: null, performance: null, rebalance: null },
+  support: DEFAULT_SUPPORT,
+  faqs: [],
+  verifiedAt: null,
+};
 
 // Initial dashboard configuration. Verify values against governing product terms before launch.
 export const DEFAULT_TERMS: Terms = {
@@ -35,6 +61,7 @@ export const DEFAULT_TERMS: Terms = {
     performance: "10% of net positive yield",
     rebalance: "Free",
   },
+  support: DEFAULT_SUPPORT,
   faqs: [
     {
       category: "Strategies & yield",
@@ -104,12 +131,12 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Custody & support",
       q: "Does DepVest take custody of my assets?",
-      a: "Your wallet stays self-custodied; DepVest never asks for your seed phrase or private keys. Custody of strategy assets is governed by each strategy's published terms.",
+      a: "Your wallet stays self-custodied; the DEPVEST team (@depvestteam) will never ask for your seed phrase, private keys, or wallet passwords. For help, contact support@depvest.com, message @depvestteam on Telegram, or join discord.gg/depvestteam. Custody of strategy assets is governed by each strategy's published terms.",
     },
     {
       category: "Custody & support",
       q: "How can I reach the DepVest support team?",
-      a: "Official support channels will be listed on the Support page once published. Never share private keys or a seed phrase with anyone claiming to be support.",
+      a: "Contact support@depvest.com, message @depvestteam on Telegram at https://t.me/depvestteam, or join discord.gg/depvestteam at https://discord.gg/depvestteam. The DEPVEST team will never ask for your seed phrase, private keys, or wallet passwords.",
     },
     {
       category: "Referrals",
