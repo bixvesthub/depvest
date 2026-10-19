@@ -39,9 +39,12 @@ import {
   NotificationsPopover,
   ProfileSheet,
   ReceiptDialog,
+  SettlementProgressDialog,
+  SettlementStatusBar,
   WalletChip,
   WALLET_ADDRESS,
   type Receipt,
+  type SettlementProgress,
 } from "@/components/depvest/extras";
 import { AdvisorDialog } from "@/components/depvest/advisor";
 import { CalculatorDialog, exportLedgerCsv, RebalanceDialog, TaskDialog, TransferDialog, VaultDetailDialog, type Alloc, type DepositStrategyName, type Flow } from "@/components/depvest/flows";
@@ -94,6 +97,13 @@ type ActivityRow = Readonly<{
   transactionType: TransactionType;
   feeBreakdown: FeeBreakdown;
   balanceDeltas: BalanceDeltas;
+  transactionHash: string;
+  grossAmount: number;
+  netAmount: number;
+  allocation?: Pick<Alloc, "Cash" | "Cloud" | "Digital">;
+  network: string;
+  simulatedBlockNumber: number;
+  finalizedAt?: number;
 }>;
 
 const navItems: Array<{ label: View; icon: typeof BarChart3; short: string }> = [
@@ -206,12 +216,19 @@ const CASH_ONLY: Alloc = { Cash: 100, Cloud: 0, Digital: 0, Task: 0 };
 const cents = (amount: number) => Math.round(amount * 100) / 100;
 const makeReference = () => {
   const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `DV-${id}`;
+  return `ref_${id.replace(/-/g, "")}`;
 };
+const makeTransactionHash = () => {
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `tx_${id.replace(/-/g, "")}`;
+};
+const amountFromValue = (value: string) => Number(value.replace(/[^0-9.-]/g, "")) || 0;
 
 function DepVestApp() {
   const [view, setView] = useState<View>("Portfolio");
   const [notice, setNotice] = useState("");
+  const [noticeReceipt, setNoticeReceipt] = useState<Receipt>(null);
+  const noticeTimerRef = useRef<number | null>(null);
   const [flow, setFlow] = useState<Flow>(null);
   const [earned, setEarned] = useState(0);
   const [referralEarnings, setReferralEarnings] = useState(0);
@@ -226,6 +243,9 @@ function DepVestApp() {
   const [terms, setTerms] = useState<Terms>(DEFAULT_TERMS);
   const [ledger, setLedger] = useState<ActivityRow[]>([]);
   const [settlementEvents, setSettlementEvents] = useState<Array<{ reference: string; status: "completed" | "failed"; timestamp: number }>>([]);
+  const [settlement, setSettlement] = useState<SettlementProgress | null>(null);
+  const settlementInFlightRef = useRef<string | null>(null);
+  const ledgerReferencesRef = useRef<Set<string>>(new Set());
   const [wallet, setWallet] = useState<string | null>(null);
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [pendingFlow, setPendingFlow] = useState<Flow>(null);
@@ -236,8 +256,16 @@ function DepVestApp() {
   const [faqQuery, setFaqQuery] = useState("");
 
   const showNotice = (message: string) => {
+    if (noticeTimerRef.current != null) window.clearTimeout(noticeTimerRef.current);
     setNotice(message);
-    window.setTimeout(() => setNotice(""), 2600);
+    setNoticeReceipt(null);
+    noticeTimerRef.current = window.setTimeout(() => { setNotice(""); setNoticeReceipt(null); }, 4200);
+  };
+  const showReceiptNotice = (message: string, nextReceipt: Receipt) => {
+    if (noticeTimerRef.current != null) window.clearTimeout(noticeTimerRef.current);
+    setNotice(message);
+    setNoticeReceipt(nextReceipt);
+    noticeTimerRef.current = window.setTimeout(() => { setNotice(""); setNoticeReceipt(null); }, 7000);
   };
   const go = (v: View) => {
     setView(v);
@@ -255,9 +283,19 @@ function DepVestApp() {
     transactionType: TransactionType;
     feeBreakdown?: FeeBreakdown;
     balanceDeltas?: BalanceDeltas;
+    transactionHash?: string;
+    grossAmount?: number;
+    netAmount?: number;
+    allocation?: Pick<Alloc, "Cash" | "Cloud" | "Digital">;
+    network?: string;
+    simulatedBlockNumber?: number;
   }) => {
     const timestamp = Date.now();
-    const reference = options.reference ?? makeReference();
+    let reference = options.reference ?? makeReference();
+    while (ledgerReferencesRef.current.has(reference)) reference = makeReference();
+    ledgerReferencesRef.current.add(reference);
+    const feeBreakdown = options.feeBreakdown ?? { network: 0, depvest: 0 };
+    const grossAmount = options.grossAmount ?? amountFromValue(value);
     const entry: ActivityRow = {
       id: reference,
       title,
@@ -271,11 +309,17 @@ function DepVestApp() {
       vaultId: options.vaultId ?? "DepVest portfolio",
       settlementTier: options.settlementTier ?? "Internal",
       transactionType: options.transactionType,
-      feeBreakdown: options.feeBreakdown ?? { network: 0, depvest: 0 },
+      feeBreakdown,
       balanceDeltas: options.balanceDeltas ?? { wallet: 0, liquid: 0, cloud: 0, digital: 0 },
+      transactionHash: options.transactionHash ?? makeTransactionHash(),
+      grossAmount,
+      netAmount: options.netAmount ?? cents(grossAmount - feeBreakdown.depvest),
+      ...(options.allocation ? { allocation: options.allocation } : {}),
+      network: options.network ?? "Base",
+      simulatedBlockNumber: options.simulatedBlockNumber ?? 19_482_104 + ledger.length,
     };
     setLedger((rows) => [...rows, entry]);
-    return reference;
+    return entry;
   };
   const settleEntry = (reference: string, onSettled: () => void, message: string) => {
     window.setTimeout(() => {
@@ -283,6 +327,35 @@ function DepVestApp() {
       onSettled();
       showNotice(message);
     }, 3500);
+  };
+  const startSettlement = (entry: ActivityRow, transactionType: "deposit" | "withdrawal" | "rebalance", amount: number) => {
+    if (settlementInFlightRef.current) return false;
+    settlementInFlightRef.current = entry.reference;
+    setSettlement({ entry, transactionType, amount, step: 0, minimized: false });
+    const durations = [700, 900, 1200, 600];
+    const advance = (step: number) => {
+      window.setTimeout(() => {
+        if (step < durations.length - 1) {
+          setSettlement((current) => current?.entry.reference === entry.reference ? { ...current, step: step + 1 } : current);
+          advance(step + 1);
+          return;
+        }
+        const finalizedAt = Date.now();
+        setSettlementEvents((events) => events.some((event) => event.reference === entry.reference)
+          ? events
+          : [...events, { reference: entry.reference, status: "completed", timestamp: finalizedAt }]);
+        settlementInFlightRef.current = null;
+        const finalizedEntry: ActivityRow = { ...entry, status: "completed", finalizedAt };
+        setSettlement((current) => {
+          if (current?.entry.reference !== entry.reference) return current;
+          return current.minimized ? null : { ...current, entry: finalizedEntry, step: 4 };
+        });
+        const label = transactionType === "rebalance" ? "Rebalance" : transactionType === "deposit" ? "Deposit" : "Withdrawal";
+        showReceiptNotice(`${label} finalized · ${fmt(amount)}`, finalizedEntry);
+      }, durations[step]);
+    };
+    advance(0);
+    return true;
   };
   const settledReferences = new Set(settlementEvents.filter((event) => event.status === "completed").map((event) => event.reference));
   const settledEntries = ledger.filter((row) => row.status === "completed" || settledReferences.has(row.reference));
@@ -296,7 +369,10 @@ function DepVestApp() {
     .filter((row) => row.transactionType === "withdrawal" && row.status === "pending" && !settledReferences.has(row.reference))
     .reduce((total, row) => total + Math.max(0, -row.balanceDeltas.liquid), 0);
   const availableCash = cents(Math.max(0, liquidCash - pendingWithdrawals));
-  const rows = ledger.map((row) => settledReferences.has(row.reference) ? { ...row, status: "completed" as const } : row);
+  const rows = ledger.map((row) => {
+    const event = settlementEvents.find((item) => item.reference === row.reference && item.status === "completed");
+    return event ? { ...row, status: "completed" as const, finalizedAt: event.timestamp } : row;
+  });
   const allRows = () => [...rows, ...activity].sort((left, right) => right.timestamp - left.timestamp);
   const referralCode = wallet ? createReferralCode(wallet) : null;
   const alloc: Alloc = portfolioTotal > 0 ? {
@@ -320,20 +396,20 @@ function DepVestApp() {
   };
   const setAction = (a: string) => {
     if (a === "Deposit" || a === "Deposit funds") {
-      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before starting another one.");
+      if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before starting another transfer.");
       return requireWallet({ kind: "deposit" });
     }
     if (a === "Withdraw funds") {
-      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before starting another one.");
+      if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before starting another transfer.");
       return requireWallet({ kind: "withdraw" });
     }
     if (a === "Rebalance") {
-      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+      if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before rebalancing.");
       return requireWallet({ kind: "rebalance", ...(allocationTotal === 0 ? { initial: CASH_ONLY } : {}) });
     }
     if (a === "Deploy Available Cash") {
       if (availableCash <= 0) return showNotice("There is no available liquid cash to deploy.");
-      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+      if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before rebalancing.");
       const investedMix = alloc.Cloud + alloc.Digital > 0
         ? { Cloud: Math.round((alloc.Cloud / (alloc.Cloud + alloc.Digital)) * 100), Digital: Math.round((alloc.Digital / (alloc.Cloud + alloc.Digital)) * 100) }
         : { Cloud: 60, Digital: 40 };
@@ -343,7 +419,7 @@ function DepVestApp() {
     if (a.startsWith("Allocate Cash: ")) {
       const targetVault = a.slice("Allocate Cash: ".length);
       if (availableCash <= 0) return showNotice("There is no available liquid cash to allocate.");
-      if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+      if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before rebalancing.");
       const targetKey: keyof Alloc = /compute/i.test(targetVault) ? "Cloud" : /treasury|cash/i.test(targetVault) ? "Cash" : "Digital";
       const current = allocationTotal === 0 ? CASH_ONLY : alloc;
       const initial: Alloc = targetKey === "Cash"
@@ -400,15 +476,16 @@ function DepVestApp() {
     referralClaimInFlightRef.current = true;
     const amount = pendingReferralEarnings;
     setPendingReferralEarnings(0);
-    const reference = addEntry("Referral rewards claimed", `+${fmt(amount)}`, `Claim submitted • ${stamp()}`, "cash", Gift, {
+    const entry = addEntry("Referral rewards claimed", `+${fmt(amount)}`, `Claim submitted • ${stamp()}`, "cash", Gift, {
       status: "pending",
       transactionType: "referral-claim",
       settlementTier: "Clearing",
       vaultId: "Available liquid cash",
+      grossAmount: amount, netAmount: amount,
       balanceDeltas: { wallet: 0, liquid: amount, cloud: 0, digital: 0 },
     });
     showNotice(`${fmt(amount)} in referral rewards is clearing`);
-    settleEntry(reference, () => { referralClaimInFlightRef.current = false; }, `${fmt(amount)} in referral rewards settled to Available cash`);
+    settleEntry(entry.reference, () => { referralClaimInFlightRef.current = false; }, `${fmt(amount)} in referral rewards settled to Available cash`);
   };
 
   return (
@@ -424,6 +501,7 @@ function DepVestApp() {
         onProfile={() => setProfileOpen(true)}
         onNotice={showNotice}
       />
+      {settlement?.minimized && <SettlementStatusBar settlement={settlement} onOpen={() => setSettlement((current) => current ? { ...current, minimized: false } : current)} />}
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
         {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} idleCash={idleCash} showIdleBanner={cashIsUnallocated} rows={allRows()} balances={{ Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
@@ -463,53 +541,58 @@ function DepVestApp() {
         </SheetContent>
       </Sheet>
       {notice && (
-        <div className="fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[60] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-md border border-success/25 bg-popover px-4 py-3 text-sm shadow-panel lg:bottom-5">
+        <div role="status" className="fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[60] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-md border border-success/25 bg-popover px-4 py-3 text-sm shadow-panel lg:bottom-5">
           <Check className="size-4 shrink-0 text-success" /> <span className="truncate">{notice}</span>
+          {noticeReceipt && <Button size="sm" className="h-8 shrink-0 rounded-full" onClick={() => { setReceipt(noticeReceipt); setSettlement((current) => current?.step === 4 ? null : current); setNotice(""); setNoticeReceipt(null); }}>View Receipt</Button>}
         </div>
       )}
       <TransferDialog flow={flow} cash={availableCash} investedCapital={investedCapital} walletBalance={walletBalance} terms={terms} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onRebalanceToCash={() => setFlow({ kind: "rebalance", initial: CASH_ONLY })} onClose={() => setFlow(null)} onNotice={showNotice}
         onDeposit={(n, net, strategyAlloc, strategyName) => {
           if (!wallet) return requireWallet(flow);
+          if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before starting another transfer.");
+          if (n <= 0 || n > walletBalance) return showNotice("Deposit amount exceeds the connected wallet balance.");
           setFlow(null);
           const nextTotal = cents(portfolioTotal + n);
           const targetCash = cents((nextTotal * strategyAlloc.Cash) / 100);
           const targetCloud = cents((nextTotal * strategyAlloc.Cloud) / 100);
           const targetDigital = cents(nextTotal - targetCash - targetCloud);
-          const reference = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, {
+          const entry = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, {
             status: "pending", transactionType: "deposit", vaultId: strategyName, settlementTier: "Clearing",
             feeBreakdown: { network: null, depvest: 0 },
+            grossAmount: n, netAmount: n, allocation: { Cash: strategyAlloc.Cash, Cloud: strategyAlloc.Cloud, Digital: strategyAlloc.Digital }, network: net,
             balanceDeltas: { wallet: -n, liquid: cents(targetCash - liquidCash), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
           });
-          showNotice(`Deposit of ${fmt(n)} with ${strategyName} is pending clearing`);
-          settleEntry(reference, () => {}, `Deposit of ${fmt(n)} with ${strategyName} confirmed`);
+          startSettlement(entry, "deposit", n);
         }}
         onWithdraw={(n, net, fee) => {
           if (!wallet) return requireWallet(flow);
+          if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before starting another transfer.");
           if (n > availableCash) return showNotice("Withdrawal exceeds withdrawable liquid cash.");
           setFlow(null);
-          const reference = addEntry("USDC withdrawal", `-${fmt(n)}`, `${net} • ${stamp()}`, "digital", ArrowDownToLine, {
+          const entry = addEntry("USDC withdrawal", `-${fmt(n)}`, `${net} • ${stamp()}`, "digital", ArrowDownToLine, {
             status: "pending", transactionType: "withdrawal", vaultId: "Connected wallet", settlementTier: net.includes("Instant") ? "Express" : "Standard T+1",
             feeBreakdown: { network: null, depvest: fee },
+            grossAmount: n, netAmount: cents(n - fee), network: net.startsWith("Ethereum") ? "Ethereum" : "Base",
             balanceDeltas: { wallet: n - fee, liquid: -n, cloud: 0, digital: 0 },
           });
-          showNotice(`Withdrawal of ${fmt(n)} is pending clearing`);
-          settleEntry(reference, () => {}, `Withdrawal of ${fmt(n)} confirmed`);
+          startSettlement(entry, "withdrawal", n);
         }} />
       <RebalanceDialog open={flow?.kind === "rebalance"} alloc={allocationTotal === 0 ? CASH_ONLY : alloc} initial={flow?.kind === "rebalance" ? flow.initial ?? null : null} targetVault={flow?.kind === "rebalance" ? flow.targetVault ?? null : null} total={portfolioTotal} rebalanceFee={terms.fees.rebalance} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onSave={(a) => {
         if (!wallet) return requireWallet(flow);
-        if (hasPendingTransfer) return showNotice("Wait for the current transfer to clear before rebalancing.");
+        if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before rebalancing.");
         const weightTotal = a.Cash + a.Cloud + a.Digital;
         if (weightTotal <= 0) return;
         const targetCash = cents((portfolioTotal * a.Cash) / weightTotal);
         const targetCloud = cents((portfolioTotal * a.Cloud) / weightTotal);
         const targetDigital = cents(portfolioTotal - targetCash - targetCloud);
         const moved = cents((Math.abs(targetCash - liquidCash) + Math.abs(targetCloud - cloudHoldings) + Math.abs(targetDigital - digitalHoldings)) / 2);
-        addEntry("Portfolio rebalanced", `${fmt(moved)} reallocated`, `Target mix updated • ${stamp()}`, "cloud", RefreshCw, {
-          transactionType: "rebalance", vaultId: "Cash + strategy vaults", settlementTier: "Settled internally",
+        const entry = addEntry("Portfolio rebalanced", `${fmt(moved)} reallocated`, `Target mix updated • ${stamp()}`, "cloud", RefreshCw, {
+          status: "pending", transactionType: "rebalance", vaultId: "Cash + strategy vaults", settlementTier: "Internal settlement",
+          grossAmount: moved, netAmount: moved, allocation: { Cash: a.Cash, Cloud: a.Cloud, Digital: a.Digital }, network: "Base",
           balanceDeltas: { wallet: 0, liquid: cents(targetCash - liquidCash), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
         });
+        startSettlement(entry, "rebalance", moved);
         setFlow(null);
-        showNotice("Portfolio rebalance settled");
       }} />
       <AdvisorDialog open={advisorOpen} onClose={() => setAdvisorOpen(false)} alloc={alloc} total={portfolioTotal} onApply={(a) => { setAdvisorOpen(false); requireWallet({ kind: "rebalance", initial: a }); }} />
       <CalculatorDialog open={flow?.kind === "calculator"} onClose={() => setFlow(null)} onInvest={(amount, target) => {
@@ -519,20 +602,22 @@ function DepVestApp() {
       <TaskDialog flow={flow} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onComplete={async (title, reward) => {
         if (!wallet) return requireWallet(flow);
         setFlow(null);
-        const reference = addEntry(`AI task payout · ${title}`, `+${fmt(reward)}`, `${WALLET_ADDRESS} · ${stamp()}`, "task", Zap, {
+        const entry = addEntry(`AI task payout · ${title}`, `+${fmt(reward)}`, `${WALLET_ADDRESS} · ${stamp()}`, "task", Zap, {
           status: "pending", transactionType: "task-payout", vaultId: "AI Task Work", settlementTier: "Clearing",
+          grossAmount: reward, netAmount: reward,
           balanceDeltas: { wallet: 0, liquid: reward, cloud: 0, digital: 0 },
         });
         setEarned((current) => current + reward);
         setTasksDone((current) => current + 1);
         showNotice(`Task payout of ${fmt(reward)} credited; settlement pending`);
-        settleEntry(reference, () => {}, `Task payout of ${fmt(reward)} confirmed`);
+        settleEntry(entry.reference, () => {}, `Task payout of ${fmt(reward)} confirmed`);
       }} />
       <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc, portfolioTotal, { Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings })).find((v) => v.name === flow.name) ?? null) : null} unallocatedCash={availableCash} onClose={() => setFlow(null)} onAllocate={(name) => setAction(`Allocate Cash: ${name}`)} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
       <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => {
         if (!ledger.some((entry) => entry.transactionType === "wallet-snapshot")) {
           addEntry("External wallet balance snapshot", `+${fmt(STARTING_WALLET_BALANCE)}`, `Connected wallet balance • ${stamp()}`, "cash", WalletCards, {
             transactionType: "wallet-snapshot", settlementTier: "Settled snapshot", vaultId: "Connected external wallet",
+            grossAmount: STARTING_WALLET_BALANCE, netAmount: STARTING_WALLET_BALANCE,
             balanceDeltas: { wallet: STARTING_WALLET_BALANCE, liquid: 0, cloud: 0, digital: 0 },
           });
         }
@@ -555,6 +640,12 @@ function DepVestApp() {
         onNotice={showNotice}
       />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} onNotice={showNotice} />
+      {settlement && <SettlementProgressDialog
+        settlement={settlement}
+        onMinimize={() => setSettlement((current) => current ? { ...current, minimized: true } : current)}
+        onClose={() => { if (settlement.step === 4) setSettlement(null); }}
+        onViewReceipt={() => { setReceipt(settlement.entry); setSettlement(null); setNotice(""); setNoticeReceipt(null); }}
+      />}
     </div>
   );
 }

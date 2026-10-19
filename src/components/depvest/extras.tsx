@@ -6,12 +6,14 @@ import {
   CircleDollarSign,
   Copy,
   Cpu,
-  ExternalLink,
+  Download,
   Gift,
   HelpCircle,
   KeyRound,
   Landmark,
+  LoaderCircle,
   LogOut,
+  Printer,
   Search,
   ShieldCheck,
   Sparkles,
@@ -247,39 +249,172 @@ export type Receipt = {
   meta: string;
   status?: "pending" | "completed" | "failed";
   timestamp?: number;
+  finalizedAt?: number;
   reference?: string;
+  transactionHash?: string;
   vaultId?: string;
   settlementTier?: string;
   feeBreakdown?: { network: number | null; depvest: number };
+  grossAmount?: number;
+  netAmount?: number;
+  allocation?: { Cash: number; Cloud: number; Digital: number };
+  network?: string;
+  simulatedBlockNumber?: number;
+  transactionType?: string;
 } | null;
 
+export type SettlementProgress = {
+  entry: NonNullable<Receipt>;
+  transactionType: "deposit" | "withdrawal" | "rebalance";
+  amount: number;
+  step: number;
+  minimized: boolean;
+};
+
+const receiptMoney = (amount: number) => `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const receiptAmount = (value: string) => Number(value.replace(/[^0-9.-]/g, "")) || 0;
+
 export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt; onClose: () => void; onNotice: (m: string) => void }) {
+  const copyValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      onNotice(`${label} copied`);
+    } catch {
+      onNotice("Clipboard access is unavailable in this browser");
+    }
+  };
+  const downloadText = () => {
+    if (!receipt) return;
+    const fee = receipt.feeBreakdown?.depvest ?? 0;
+    const gross = receipt.grossAmount ?? receiptAmount(receipt.value);
+    const settled = receipt.netAmount ?? gross - fee;
+    const timestamp = receipt.finalizedAt ?? receipt.timestamp;
+    const allocation = receipt.allocation
+      ? `US Treasury ${receipt.allocation.Cash}% · AI Compute ${receipt.allocation.Cloud}% · Blue-Chip ${receipt.allocation.Digital}%`
+      : "Not applicable";
+    const content = [
+      "DepVest transaction receipt",
+      `Status: ${receipt.status === "completed" ? "Finalized · Cleared via Authoritative Ledger" : receipt.status === "failed" ? "Failed" : "Settlement in progress"}`,
+      `Transaction type: ${receipt.transactionType ?? "Transaction"}`,
+      `Description: ${receipt.title}`,
+      `Reference ID: ${receipt.reference ?? "Not recorded"}`,
+      `Transaction hash: ${receipt.transactionHash ?? "Not recorded"}`,
+      `UTC date: ${timestamp == null ? "Not recorded" : new Date(timestamp).toISOString().slice(0, 10)}`,
+      `Local time: ${timestamp == null ? "Not recorded" : new Date(timestamp).toLocaleString()}`,
+      `Gross amount: ${receiptMoney(gross)}`,
+      `DepVest fee: ${receiptMoney(fee)}${fee > 0 && receipt.settlementTier === "Express" ? " (1.5% Instant fee)" : ""}`,
+      `Net settled amount: ${receiptMoney(settled)}`,
+      `Allocation: ${allocation}`,
+      `Network: ${receipt.network ?? "Base"} · Simulated block #${receipt.simulatedBlockNumber ?? "—"}`,
+      `Vault: ${receipt.vaultId ?? "DepVest portfolio"}`,
+      `Settlement tier: ${receipt.settlementTier ?? "Standard T+1"}`,
+      `Details: ${receipt.meta}`,
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `depvest-receipt-${(receipt.reference ?? "transaction").replace(/[^a-zA-Z0-9_-]/g, "-")}.txt`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const fee = receipt?.feeBreakdown?.depvest ?? 0;
+  const gross = receipt?.grossAmount ?? (receipt ? receiptAmount(receipt.value) : 0);
+  const settled = receipt?.netAmount ?? gross - fee;
+  const timestamp = receipt?.finalizedAt ?? receipt?.timestamp;
   return (
     <Dialog open={!!receipt} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md border-border bg-popover">
+      <DialogContent className="receipt-print-area max-h-[90vh] max-w-lg overflow-y-auto border-border bg-popover">
         <DialogHeader>
           <DialogTitle>Transaction receipt</DialogTitle>
           <DialogDescription>{receipt?.title}</DialogDescription>
         </DialogHeader>
         {receipt && (
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cn("rounded-full px-3 py-1 text-[10px] font-medium", receipt.status === "pending" ? "bg-warning/15 text-warning" : receipt.status === "failed" ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>{receipt.status === "pending" ? "Settlement in progress" : receipt.status === "failed" ? "Failed" : "Finalized"}</span>
+              {receipt.status === "completed" && <span className="rounded-full border border-success/25 bg-success/5 px-3 py-1 text-[10px] text-success">Cleared via Authoritative Ledger</span>}
+            </div>
+            <p className="text-[10px] text-muted-foreground">Local session simulation · no network transaction was submitted.</p>
             <p className="font-mono text-3xl text-success">{receipt.value}</p>
-            <dl className="space-y-2 rounded-md border border-border bg-background/40 p-4 text-xs">
-              <Row k="Clearing status" v={receipt.status === "pending" ? <span className="text-warning">● Clearing</span> : receipt.status === "failed" ? <span className="text-destructive">● Failed</span> : <span className="text-success">✓ Settled</span>} />
-              {receipt.timestamp != null && <Row k="Timestamp" v={new Date(receipt.timestamp).toLocaleString()} />}
-              <Row k="Details" v={<span className="max-w-[60%] text-[11px]">{receipt.meta}</span>} />
-              <Row k="Network" v="Base" />
-              <Row k="Vault" v={receipt.vaultId ?? "DepVest vault"} />
+            <dl className="space-y-3 rounded-md border border-border bg-background/40 p-4 text-xs">
+              <Row k="Transaction type" v={receipt.transactionType ?? "Transaction"} />
+              <Row k="Reference ID" v={<span className="flex max-w-[65%] items-center gap-2"><span className="break-all font-mono text-[10px]">{receipt.reference ?? "Not recorded"}</span>{receipt.reference && <button type="button" aria-label="Copy reference ID" className="shrink-0 text-success" onClick={() => void copyValue(receipt.reference!, "Reference ID")}><Copy className="size-3.5" /></button>}</span>} />
+              <Row k="Transaction hash" v={<span className="flex max-w-[65%] items-center gap-2"><span className="break-all font-mono text-[10px]">{receipt.transactionHash ?? "Not recorded"}</span>{receipt.transactionHash && <button type="button" aria-label="Copy transaction hash" className="shrink-0 text-success" onClick={() => void copyValue(receipt.transactionHash!, "Transaction hash")}><Copy className="size-3.5" /></button>}</span>} />
+              <Row k="UTC date" v={timestamp == null ? "Not recorded" : new Date(timestamp).toISOString().slice(0, 10)} />
+              <Row k="Local time" v={timestamp == null ? "Not recorded" : new Date(timestamp).toLocaleString()} />
+              <div className="border-t border-border pt-3"><Row k="Gross amount" v={<span className="font-mono">{receiptMoney(gross)}</span>} /></div>
+              <Row k="Fee deduction" v={<span className="text-right font-mono">{receiptMoney(fee)}{fee > 0 && receipt.settlementTier === "Express" && <span className="ml-1 block font-sans text-[9px] text-muted-foreground">1.5% Instant fee</span>}</span>} />
+              <Row k="Net settled amount" v={<span className="font-mono font-semibold text-success">{receiptMoney(settled)}</span>} />
+              {receipt.allocation && <Row k="Strategy allocation" v={<span className="text-right text-[10px]">US Treasury {receipt.allocation.Cash}%<br />AI Compute {receipt.allocation.Cloud}%<br />Blue-Chip {receipt.allocation.Digital}%</span>} />}
+              <Row k="Network · simulated block" v={<span>{receipt.network ?? "Base"} #{receipt.simulatedBlockNumber ?? "—"}</span>} />
+              <Row k="Vault / destination" v={receipt.vaultId ?? "DepVest portfolio"} />
               <Row k="Settlement tier" v={receipt.settlementTier ?? "Standard T+1"} />
-              <Row k="Fee breakdown" v={<span className="text-right text-[10px]">DepVest: ${receipt.feeBreakdown?.depvest.toFixed(2) ?? "0.00"}<br />Network: {receipt.feeBreakdown?.network == null ? "Shown by wallet" : `$${receipt.feeBreakdown.network.toFixed(2)}`}</span>} />
-              <Row k="Unique reference ID" v={<span className="break-all font-mono text-[10px]">{receipt.reference ?? "Not recorded"}</span>} />
+              <Row k="Network fee" v={receipt.feeBreakdown?.network == null ? "Shown by wallet" : receiptMoney(receipt.feeBreakdown.network)} />
+              <Row k="Details" v={<span className="max-w-[65%] text-[10px]">{receipt.meta}</span>} />
             </dl>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={() => onNotice("Receipt copied")}><Copy />Copy</Button>
-              <Button variant="outline" onClick={() => onNotice("Opening block explorer on Base…")}><ExternalLink />Explorer</Button>
+            <div className="grid grid-cols-3 gap-2">
+              <Button variant="outline" onClick={onClose}>Close</Button>
+              <Button variant="outline" onClick={downloadText}><Download />Text</Button>
+              <Button variant="outline" onClick={() => window.print()}><Printer />Print</Button>
             </div>
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const settlementStages = [
+  { title: "Parameter Verification", description: "Validating wallet balance and liquidity constraints." },
+  { title: "Ledger Inscription", description: "Generating the authoritative reference and transaction hash, then calculating fees." },
+  { title: "Network Confirmation", description: "Simulating network broadcast and confirmation." },
+  { title: "Settlement Finalized", description: "Applying the balance update to available cash and vault allocations." },
+];
+
+export function SettlementStatusBar({ settlement, onOpen }: { settlement: SettlementProgress; onOpen: () => void }) {
+  const type = settlement.transactionType === "rebalance" ? "Rebalance" : settlement.transactionType === "deposit" ? "Deposit" : "Withdrawal";
+  return (
+    <button type="button" onClick={onOpen} className="sticky top-16 z-40 mx-auto flex w-full max-w-[1440px] items-center gap-2 border-b border-success/25 bg-popover/95 px-4 py-2.5 text-left text-[11px] shadow-card backdrop-blur sm:px-6 lg:px-8">
+      <LoaderCircle className="size-3.5 shrink-0 animate-spin text-success" />
+      <span className="min-w-0 flex-1 truncate">Settlement in progress: {type} {receiptMoney(settlement.amount)} · Ref {settlement.entry.transactionHash} — Step {settlement.step + 1}/4</span>
+      <span className="shrink-0 text-success">Tap to view</span>
+    </button>
+  );
+}
+
+export function SettlementProgressDialog({ settlement, onMinimize, onClose, onViewReceipt }: { settlement: SettlementProgress; onMinimize: () => void; onClose: () => void; onViewReceipt: () => void }) {
+  const type = settlement.transactionType === "rebalance" ? "Rebalance" : settlement.transactionType === "deposit" ? "Deposit" : "Withdrawal";
+  return (
+    <Dialog open={!settlement.minimized} onOpenChange={(open) => { if (!open && settlement.step === 4) onClose(); }}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto border-border bg-popover sm:max-w-lg">
+        <DialogHeader className="text-left">
+          <Eyebrow>Authoritative ledger simulation</Eyebrow>
+          <DialogTitle className="text-xl">{settlement.step === 4 ? "Settlement Finalized" : "Settlement in Progress"}</DialogTitle>
+          <DialogDescription>{type} · {receiptMoney(settlement.amount)} · {settlement.entry.network}</DialogDescription>
+        </DialogHeader>
+        <div className="rounded-md border border-border bg-background/40 p-3 text-[10px]">
+          <p className="text-muted-foreground">Transaction reference</p>
+          <p className="mt-1 break-all font-mono">{settlement.entry.reference}</p>
+          <p className="mt-2 break-all font-mono text-success">{settlement.entry.transactionHash}</p>
+        </div>
+        <ol className="space-y-2">
+          {settlementStages.map((stage, index) => {
+            const complete = index < settlement.step || settlement.step === 4;
+            const active = index === settlement.step && settlement.step < 4;
+            return <li key={stage.title} className={cn("flex gap-3 rounded-md border p-3 transition-colors", active ? "border-success/40 bg-success/5" : complete ? "border-success/20 bg-success/[0.03]" : "border-border bg-background/20")}>
+              <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border", complete ? "border-success bg-success/15 text-success" : active ? "border-success/50 text-success" : "border-border text-muted-foreground")}>
+                {complete ? <Check className="size-4" /> : active ? <LoaderCircle className="size-4 animate-spin" /> : <span className="font-mono text-[10px]">{index + 1}</span>}
+              </span>
+              <span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-xs font-medium">{stage.title}{active && <i className="size-1.5 animate-pulse rounded-full bg-success" />}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{index === 2 ? `Simulating network broadcast on ${settlement.entry.network}.` : stage.description}</span></span>
+              {active && <span className="shrink-0 font-mono text-[9px] text-success">{index === 0 ? "700 ms" : index === 1 ? "900 ms" : index === 2 ? "1,200 ms" : "600 ms"}</span>}
+            </li>;
+          })}
+        </ol>
+        {settlement.step === 4 && <p className="rounded-md border border-success/25 bg-success/5 p-3 text-xs text-success">Balances have been updated in this dashboard session. The receipt is ready.</p>}
+        <div className="flex justify-end gap-2">
+          {settlement.step < 4 ? <Button variant="outline" onClick={onMinimize}>Minimize</Button> : <Button variant="outline" onClick={onClose}>Close</Button>}
+          {settlement.step === 4 && <Button onClick={onViewReceipt}>View Receipt</Button>}
+        </div>
       </DialogContent>
     </Dialog>
   );
