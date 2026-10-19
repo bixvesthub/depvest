@@ -241,9 +241,24 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
   const [q, setQ] = useState(initialQuery);
   const productFaqs = [
     {
+      category: "About this dashboard",
+      q: "Is this a live investment or wallet service?",
+      a: "No. This is an interactive UI prototype. Wallet selection, balances, rates, transactions, tasks, and rewards are examples held in local session state; the dashboard does not connect to a backend or submit blockchain transactions.",
+    },
+    {
+      category: "About this dashboard",
+      q: "Are the displayed rates live or guaranteed?",
+      a: "No. They are configured display examples, not live rate feeds, verified performance, or promises of future returns. Investments can lose value.",
+    },
+    {
+      category: "Deposits & withdrawals",
+      q: "Does a deposit or withdrawal move real funds?",
+      a: "No. The transaction flows and their ledger statuses are local demonstrations. Do not send funds to the sample deposit address shown in this prototype.",
+    },
+    {
       category: "Account & access",
       q: "How do I connect a wallet?",
-      a: "Tap Connect Wallet and choose MetaMask, Coinbase Wallet, Ledger (Hardware Wallet), or WalletConnect. Deposits, withdrawals, rebalances, and tasks require a connected wallet. Never share your seed phrase.",
+      a: "The wallet picker lets you explore the connected-wallet interface using demo session state; it does not connect a wallet provider. Never share your seed phrase, private keys, or wallet password.",
     },
     {
       category: "Deposits & withdrawals",
@@ -253,12 +268,12 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Deposits & withdrawals",
       q: "Can I withdraw funds invested in a vault?",
-      a: "Vault funds cannot be withdrawn directly. Rebalance the portfolio to the Liquid Cash Only 100% Cash preset, wait for it to settle, then withdraw the resulting liquid cash. Max in the withdrawal flow uses liquid cash only.",
+      a: "In the dashboard simulation, vault allocations cannot be withdrawn directly. Rebalance to Liquid Cash Only first; this changes local session state only.",
     },
     {
       category: "Ledger & accounting",
       q: "How does the ledger reconcile my balances?",
-      a: "Settled session ledger entries are the source of truth for external wallet, available liquid cash, and locked vault balances. Clearing transactions remain pending, and fee details and references are available from each receipt. The ledger is local to the current dashboard session.",
+      a: "The session ledger displays local examples of liquid cash and vault balances. Clearing transactions remain pending in the simulation, and receipts show references and fee details. It does not read or reconcile an external wallet, and it resets when the session ends.",
     },
     {
       category: "Strategies & yield",
@@ -268,7 +283,22 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Fees & eligibility",
       q: "What fees are listed?",
-      a: `Configured fee schedule — deposit: ${terms.fees.deposit ?? "not configured"}; withdrawal: ${terms.fees.withdrawal ?? "not configured"}; performance: ${terms.fees.performance ?? "not configured"}; rebalance: ${terms.fees.rebalance ?? "not configured"}. Review the official terms for applicability and conditions.`,
+      a: `Configured fee examples are deposit, withdrawal, performance, and rebalance display values only; these are not live charges or governing service terms.`,
+    },
+    {
+      category: "Active Earn",
+      q: "How does Active Earn work in this prototype?",
+      a: "The task interface demonstrates sample work with configured rewards and an accuracy threshold. Accepted tasks add a credit to local session state only; no external task-review or payout service is connected.",
+    },
+    {
+      category: "Referrals",
+      q: "Are referral rewards paid out?",
+      a: "The referral interface demonstrates codes, balances, and claims in local session state. No real referral registration or external payout service is connected, and displayed reward tiers are estimates.",
+    },
+    {
+      category: "Custody & support",
+      q: "Does this dashboard confirm asset custody or an audit?",
+      a: "No. This prototype does not verify asset ownership, custody arrangements, insurance, audited performance, or security audits. Review independently verified product disclosures before using a live financial service.",
     },
     {
       category: "Custody & support",
@@ -369,32 +399,43 @@ export function About() {
   const pillars = [
     {
       icon: Building2,
-      t: "Treasury strategy",
-      c: "A strategy seeking income from short-duration government debt. Exposure, custody arrangements, liquidity, and risks depend on the applicable product terms.",
+      t: "Treasury cash concept",
+      c: "A portfolio category that illustrates exposure to short-duration government debt. This dashboard does not verify Treasury purchases, asset ownership, custody, or strategy income.",
     },
     {
       icon: Sparkles,
-      t: "Compute strategy",
-      c: "A strategy seeking revenue from renting GPU or CPU capacity. Demand, operating costs, counterparties, and equipment utilization can affect performance.",
+      t: "AI cloud compute concept",
+      c: "A portfolio category that illustrates possible revenue from renting computing capacity. No hardware contracts, utilization, counterparties, or rental revenue are connected to this prototype.",
     },
     {
       icon: ShieldCheck,
-      t: "Digital-asset strategy",
-      c: "A strategy seeking staking rewards and protocol fees. Token volatility, smart-contract failure, slashing, and unstaking delays can affect outcomes.",
+      t: "Digital-asset concept",
+      c: "A portfolio category for exploring digital-asset allocation. Token volatility, protocol failure, slashing, custody, and unstaking delays can create losses.",
     },
     {
       icon: Zap,
-      t: "Active Earn",
-      c: "Task-based earning through eligible work. Task availability, acceptance, and compensation are subject to the applicable task terms.",
+      t: "Active Earn demo",
+      c: "An interactive task workflow with configured examples and session credits. The prototype has no connected task-review service or external payout system.",
     },
   ];
   return (
     <section>
       <Intro
         eyebrow="About DepVest"
-        title="A single view of diversified strategies."
-        copy="DepVest is a multi-asset yield platform that brings portfolio tools, strategy information, and activity views together in one place. Explore Treasury, compute, digital-asset, and task-based strategies, and review their terms and risks before making financial decisions."
+        title="One dashboard for portfolio tools and activity."
+        copy="DepVest is a dashboard concept for exploring a multi-asset portfolio alongside task-based activity. It brings allocation tools, strategy comparisons, a session ledger, and educational information into one interface."
       />
+      <Card className="mb-6 border-warning/30 bg-warning/5">
+        <Eyebrow>Current build status</Eyebrow>
+        <h2 className="mt-2 text-sm font-semibold">An interactive UI prototype</h2>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          This build uses local session state and has no connected service for executing blockchain
+          transactions, verifying strategy assets or yields, reviewing real task submissions, or
+          issuing external payouts. Displayed balances, rates, fees, task credits, and referral
+          activity are examples for exploring the interface; they do not confirm real assets,
+          performance, or services.
+        </p>
+      </Card>
       <div className="grid gap-4 md:grid-cols-2">
         {pillars.map(({ icon: Icon, t, c }) => (
           <Card key={t}>
@@ -407,12 +448,12 @@ export function About() {
         ))}
       </div>
       <Card className="mt-6">
-        <Eyebrow>Platform capabilities</Eyebrow>
+        <Eyebrow>What you can explore</Eyebrow>
         <ul className="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-3">
           {[
-            "Multi-asset strategies across Treasury cash, AI compute, and digital-asset staking.",
-            "Portfolio management with allocation presets, rebalancing, AI Risk Check, and a yield calculator.",
-            "Wallet-gated deposits and withdrawals, Active Earn tasks, and tiered referral rewards.",
+            "Allocation presets, a rebalance flow, an AI Risk Check, and an illustrative yield calculator.",
+            "A session ledger that demonstrates deposit, withdrawal, rebalance, task, and referral entries.",
+            "Example Active Earn tasks and referral flows, with activity held in local session state.",
           ].map((p) => (
             <li key={p} className="flex gap-2">
               <Check className="size-3.5 shrink-0 text-success" />
@@ -431,24 +472,25 @@ export function Rules({ terms }: { terms: Terms }) {
     {
       t: "Account and transaction access",
       items: [
-        "Deposits, withdrawals, rebalances, and tasks require a connected wallet on a supported network (Base or Ethereum).",
-        "Minimum deposit: none currently set — this is an unconfirmed estimate, not an established term.",
-        "External transfers and payouts show Clearing until settled; internal rebalances are recorded as Settled.",
-        "Do not send funds to an address unless it is confirmed through a verified official product flow.",
+        "The wallet picker and connected-wallet state in this build are demo interactions; they do not connect to a wallet provider or authorize a blockchain transaction.",
+        "No minimum deposit for a live service has been established.",
+        "Deposit, withdrawal, and task screens demonstrate possible flows. No on-chain transaction or external payout is executed by this prototype.",
+        "Do not send funds to the sample address displayed in this build; it is not a verified deposit service.",
+        "Never share a seed phrase, private key, or wallet password.",
       ],
     },
     {
       t: "Fees and charges",
       items: [
-        "The fee schedule below reflects the terms currently configured for DepVest.",
-        "Fees may depend on strategy, transaction type, timing, network, or other terms.",
-        "Review the governing product terms for the exact fee, calculation method, and payment conditions.",
+        "Values in the fee schedule are configured dashboard examples, not a live quote or proof that a fee has been charged.",
+        "Current examples show free deposits, free standard withdrawals, a 1.5% instant withdrawal fee, and a 10% fee on net positive yield.",
+        "Actual fees, calculation methods, and payment conditions would need to be established in published product terms before a live service is used.",
       ],
     },
     {
       t: "Allocations and rebalancing",
       items: [
-        "A confirmed rebalance moves the settled local ledger balance between liquid cash and strategy vault holdings.",
+        "The rebalance flow updates the prototype's local portfolio and ledger state; it does not move assets on-chain.",
         "Presets: Conservative 75/15/10, Balanced 40/35/25, Aggressive 10/65/25, or Liquid Cash Only at 100% cash.",
         "Target allocations do not ensure diversification, liquidity, or a particular result.",
       ],
@@ -456,53 +498,52 @@ export function Rules({ terms }: { terms: Terms }) {
     {
       t: "Strategy Liquidity Rules",
       items: [
-        "Withdrawable Liquid Cash is separate from capital invested in Compute and Digital strategy vaults.",
+        "In the dashboard simulation, Withdrawable Liquid Cash is separate from amounts allocated to Compute and Digital vaults.",
         "Invested vault funds are locked for direct withdrawal and cannot be used by Max.",
-        "To withdraw invested funds, rebalance the portfolio to Liquid Cash Only (100% Cash), wait for the rebalance to settle, then submit a withdrawal.",
-        "The withdrawal dialog offers a Rebalance to Liquid Cash shortcut when liquid cash is zero or too low.",
+        "To model a withdrawal, rebalance to Liquid Cash Only (100% Cash), then use the withdrawal flow. This changes local session state only.",
+        "Daily compounding, 30-day compute epochs, and a 7-day digital-asset unstaking period are unconfirmed estimates, not established liquidity terms.",
       ],
     },
     {
       t: "Withdrawals & Settlement",
       items: [
-        "Standard settlement is free and settles T+1.",
-        "Instant settlement carries a 1.5% fee, deducted from the amount received.",
-        "Withdrawals cannot exceed settled Withdrawable Liquid Cash; pending withdrawals are reserved until settled.",
-        "Invested vault funds cannot be withdrawn directly; rebalance them to liquid cash first.",
-        "Payout timing (daily Treasury compounding, 30-day compute epochs, 7-day digital unstaking) is an unconfirmed estimate, not an established term.",
+        "The interface presents standard (T+1) and instant (1.5%) withdrawal options as configured examples; these are not live settlement services or guaranteed timing.",
+        "The simulation limits withdrawal amounts to available liquid cash and models a pending Clearing state before settlement.",
+        "Pending entries and settlement events are examples in the local ledger, not confirmation from a network, custodian, or payment provider.",
+        "Strategy payout timing is not verified or established by this dashboard.",
       ],
     },
     {
       t: "Ledger accounting",
       items: [
-        "Every deposit, withdrawal, rebalance, Active Earn payout, and referral claim receives an immutable entry with a unique reference ID, timestamp, fee breakdown, balance deltas, and clearing status.",
-        "Settlement is recorded as a separate append-only event; settled ledger entries are the source of truth for wallet, liquid cash, and locked vault balances in this dashboard session.",
-        "Clearing entries do not change settled balances. Ledger receipts and exported statements include the reference and fee breakdown.",
-        "Session entries are held in local React state and do not persist after the dashboard session ends.",
+        "The interface records example deposits, withdrawals, rebalances, task credits, and referral claims with references, timestamps, fee details, and status.",
+        "Clearing and Settled labels describe the prototype's local ledger state; they do not confirm an external transfer or payout.",
+        "Balances and ledger entries are held in local session state and do not persist after the dashboard session ends.",
       ],
     },
     {
       t: "Active Earn",
       items: [
-        "Tasks pay $0.10–$0.30 each when accepted, depending on task type.",
-        "A task is accepted only at 70% accuracy or higher.",
+        "The interface shows configured task credit examples ranging from 0.10 to 0.30 by task type.",
+        "A task is accepted in the demo only at 70% accuracy or higher.",
         "Up to five task attempts per session, one attempt per task type; limits reset each session and duplicate task attempts are blocked.",
+        "Accepted tasks add a demo credit to local session state. No external task review, anti-bot enforcement, or payout service is connected.",
       ],
     },
     {
       t: "Referral program",
       items: [
-        "Each connected wallet gets a personal code (DV-XXXXXX); self-referrals are not accepted.",
-        "A referral counts only after the friend registers successfully and activates their account; a claim can be submitted only once for the available claim balance.",
-        "Estimated tiers: 5% (1+ friend), 10% (3+), 15% (10+). These rates are unconfirmed estimates, not established terms. Claimed rewards move to Available Cash.",
+        "The interface can generate a session referral code and demonstrate referral claim flows; it does not register or verify real referrals.",
+        "Displayed referral tiers are estimates only, not established reward terms.",
+        "Claims update local session state only; no external referral payout service is connected.",
       ],
     },
     {
       t: "Eligibility and service terms",
       items: [
-        "Eligibility, identity checks, supported assets and networks, and service availability are subject to the applicable official terms.",
-        "Review custody, withdrawal, fee, and strategy disclosures before participating in a financial product.",
-        "Where published product terms apply, they govern over this informational summary.",
+        "This dashboard does not establish eligibility, identity checks, custody arrangements, supported live assets, or service availability.",
+        "It does not provide evidence of asset ownership, insurance, audited performance, or a completed security audit.",
+        "Review independently verified official product and legal terms before participating in any live financial service.",
       ],
     },
   ];
@@ -517,11 +558,13 @@ export function Rules({ terms }: { terms: Terms }) {
       <Intro
         eyebrow="Rules & Policies"
         title="Policies, fees and risk disclosure."
-        copy="Review service policies, configured fees, and the risks associated with each strategy. This informational summary does not replace the governing product terms."
+        copy="Review how the dashboard models fees, transactions, tasks, and strategy risks. The examples on this page describe the current interface, not live financial service terms."
       />
       <div className="mb-4 rounded-md border border-warning/30 bg-warning/5 p-4 text-xs leading-relaxed text-muted-foreground">
-        This summary explains how DepVest features work. Where governing product terms are
-        published, they take precedence over this page.
+        Prototype notice: this is a UI-only dashboard. Wallet, transaction, task, settlement, and
+        reward flows update local session state; no backend or blockchain transaction is connected.
+        Do not send funds to the sample deposit address. Any future live service must be governed by
+        separately published and verified product terms.
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {sections.map((s) => (
