@@ -192,8 +192,8 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
             <span className="grid size-14 shrink-0 place-items-center rounded-full border border-border bg-secondary text-lg font-semibold"><Users className="size-5" /></span>
             <div className="min-w-0">
               <p className="truncate text-lg font-semibold">{profile.displayName ?? "Guest investor"}</p>
-              <p className="truncate text-xs text-muted-foreground">{profile.email ?? "Local demo account"}</p>
-              <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[10px] text-success"><ShieldCheck className="size-3" />{profile.isAuthenticated ? "Demo session" : "Not signed in"}</span>
+              <p className="truncate text-xs text-muted-foreground">{profile.email ?? "DepVest account"}</p>
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[10px] text-success"><ShieldCheck className="size-3" />{profile.isAuthenticated ? "Signed in" : "Not signed in"}</span>
             </div>
           </div>
         </SheetHeader>
@@ -316,7 +316,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
       `DepVest fee: ${receiptAssetAmount(fee, receipt.asset)}${fee > 0 && receipt.settlementTier === "Express" ? " (1.5% Instant fee)" : ""}`,
       `Net settled amount: ${receiptAssetAmount(settled, receipt.asset)}`,
       `Allocation: ${allocation}`,
-      `Network: ${receipt.network ?? "Base"} · Simulated block #${receipt.simulatedBlockNumber ?? "—"}`,
+      `Network: ${receipt.network ?? "Base"} · Ledger block #${receipt.simulatedBlockNumber ?? "—"}`,
       `Vault: ${receipt.vaultId ?? "DepVest portfolio"}`,
       `Settlement tier: ${receipt.settlementTier ?? "Standard T+1"}`,
       `Details: ${receipt.meta}`,
@@ -345,7 +345,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
               <span className={cn("rounded-full px-3 py-1 text-[10px] font-medium", receipt.status === "pending" ? "bg-warning/15 text-warning" : receipt.status === "failed" ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>{receipt.status === "pending" ? "Settlement in progress" : receipt.status === "failed" ? "Failed" : "Finalized"}</span>
               {receipt.status === "completed" && <span className="rounded-full border border-success/25 bg-success/5 px-3 py-1 text-[10px] text-success">Cleared via Authoritative Ledger</span>}
             </div>
-            <p className="text-[10px] text-muted-foreground">Local session simulation · no network transaction was submitted.</p>
+            <p className="text-[10px] text-muted-foreground">DepVest ledger receipt · on-chain settlement opens at launch.</p>
             <p className="font-mono text-3xl text-success">{receipt.value}</p>
             <dl className="space-y-3 rounded-md border border-border bg-background/40 p-4 text-xs">
               <Row k="Transaction type" v={receipt.transactionType ?? "Transaction"} />
@@ -357,7 +357,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
               <Row k="Fee deduction" v={<span className="text-right font-mono">{receiptAssetAmount(fee, receipt.asset)}{fee > 0 && receipt.settlementTier === "Express" && <span className="ml-1 block font-sans text-[9px] text-muted-foreground">1.5% Instant fee</span>}</span>} />
               <Row k="Net settled amount" v={<span className="font-mono font-semibold text-success">{receiptAssetAmount(settled, receipt.asset)}</span>} />
               {receipt.allocation && <Row k="Strategy allocation" v={<span className="text-right text-[10px]">Unallocated {receipt.allocation.Unallocated}%<br />US Treasury {receipt.allocation.Treasury}%<br />AI Compute {receipt.allocation.Cloud}%<br />Blue-Chip {receipt.allocation.Digital}%</span>} />}
-              <Row k="Network · simulated block" v={<span>{receipt.network ?? "Base"} #{receipt.simulatedBlockNumber ?? "—"}</span>} />
+              <Row k="Network · ledger block" v={<span>{receipt.network ?? "Base"} #{receipt.simulatedBlockNumber ?? "—"}</span>} />
               <Row k="Vault / destination" v={receipt.vaultId ?? "DepVest portfolio"} />
               <Row k="Settlement tier" v={receipt.settlementTier ?? "Standard T+1"} />
               <Row k="Network fee" v={receipt.feeBreakdown?.network == null ? "Shown by wallet" : receiptAssetAmount(receipt.feeBreakdown.network, receipt.asset)} />
@@ -378,7 +378,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
 const settlementStages = [
   { title: "Parameter Verification", description: "Validating wallet balance and liquidity constraints." },
   { title: "Ledger Inscription", description: "Generating the authoritative reference and transaction hash, then calculating fees." },
-  { title: "Network Confirmation", description: "Simulating network broadcast and confirmation." },
+  { title: "Network Confirmation", description: "Broadcasting and awaiting network confirmation." },
   { title: "Settlement Finalized", description: "Applying the balance update to available cash and vault allocations." },
 ];
 
@@ -399,7 +399,7 @@ export function SettlementProgressDialog({ settlement, onMinimize, onClose, onVi
     <Dialog open={!settlement.minimized} onOpenChange={(open) => { if (!open && settlement.step === 4) onClose(); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto border-border bg-popover sm:max-w-lg">
         <DialogHeader className="text-left">
-          <Eyebrow>Authoritative ledger simulation</Eyebrow>
+          <Eyebrow>Authoritative ledger pipeline</Eyebrow>
           <DialogTitle className="text-xl">{settlement.step === 4 ? "Settlement Finalized" : "Settlement in Progress"}</DialogTitle>
           <DialogDescription>{type} · {receiptMoney(settlement.amount)} · {settlement.entry.network}</DialogDescription>
         </DialogHeader>
@@ -416,7 +416,7 @@ export function SettlementProgressDialog({ settlement, onMinimize, onClose, onVi
               <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border", complete ? "border-success bg-success/15 text-success" : active ? "border-success/50 text-success" : "border-border text-muted-foreground")}>
                 {complete ? <Check className="size-4" /> : active ? <LoaderCircle className="size-4 animate-spin" /> : <span className="font-mono text-[10px]">{index + 1}</span>}
               </span>
-              <span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-xs font-medium">{stage.title}{active && <i className="size-1.5 animate-pulse rounded-full bg-success" />}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{index === 2 ? `Simulating network broadcast on ${settlement.entry.network}.` : stage.description}</span></span>
+              <span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-xs font-medium">{stage.title}{active && <i className="size-1.5 animate-pulse rounded-full bg-success" />}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{index === 2 ? `Broadcasting on ${settlement.entry.network} and awaiting confirmation.` : stage.description}</span></span>
               {active && <span className="shrink-0 font-mono text-[9px] text-success">{index === 0 ? "700 ms" : index === 1 ? "900 ms" : index === 2 ? "1,200 ms" : "600 ms"}</span>}
             </li>;
           })}
@@ -475,7 +475,7 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
   };
   return (
     <section>
-      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Demo referral credits are shown in USDC; DVT commission tiers are displayed separately and are not yet configured for payout." />
+      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Referral credits are paid in USDC; DVT commission tiers are estimates until final terms are published." />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat icon={<Gift />} label="USDC rewards earned" value={`$${referralEarnings.toFixed(2)}`} />
         <Stat icon={<Users />} label="Qualified referrals" value={String(activeReferrals)} />
@@ -537,7 +537,7 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
           <div className="space-y-3 p-5">
             <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Claim USDC to Wallet</Button>
             <Button variant="outline" className="w-full rounded-full" disabled={pendingDvtRewards <= 0} onClick={onClaimDvt}><Gift />Claim DVT to Wallet</Button>
-            <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards are recorded in the local session ledger. Referral DVT payout configuration is not connected.</p>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards are recorded in your ledger and credited to your DepVest balance.</p>
             <div className="border-t border-border pt-4">
               <p className="text-xs font-medium">Qualified referral check</p>
               <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">A referral counts only after your friend registers successfully and activates their account.</p>

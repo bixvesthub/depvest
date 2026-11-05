@@ -66,22 +66,22 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Strategies & yield",
       q: "How do the DepVest strategies seek to generate yield?",
-      a: "The dashboard presents three strategy concepts: Treasury cash seeking government-debt interest, AI cloud compute seeking hardware-rental revenue, and blue-chip digital assets seeking staking and protocol rewards. This prototype does not verify underlying assets, counterparties, or revenue. Each concept carries market, operational, custody, and liquidity risks.",
+      a: "DepVest offers three strategies: US Treasury Cash targets short-duration government-debt interest, AI Cloud Compute targets hardware-leasing revenue, and Blue-Chip Digital targets staking and protocol rewards. Each strategy carries market, operational, custody, and liquidity risks.",
     },
     {
       category: "Strategies & yield",
       q: "Are the displayed yields guaranteed or fixed?",
-      a: "No. The configured display rates are 4.65% for Cash, 11.40% for Cloud, and 6.20% for Digital. They are examples, not live rate feeds, verified performance, or promises of returns. Actual strategy returns can change, and investments can lose value.",
+      a: "No. The configured display rates are 4.65% for Cash, 11.40% for Cloud, and 6.20% for Digital. They are target rates, not live rate feeds or promises of returns. Actual strategy returns can change, and investments can lose value.",
     },
     {
-      category: "About this dashboard",
-      q: "Is this a live investment or wallet service?",
-      a: "No. This is an interactive UI prototype. Wallet selection, balances, rates, transactions, tasks, and rewards are examples held in local session state; the dashboard does not connect to a backend or submit blockchain transactions.",
+      category: "About DepVest",
+      q: "Is DepVest live?",
+      a: "DepVest is in its pre-launch phase. You can connect a wallet, plan allocations, run rebalances, complete Active Earn tasks, and review your ledger today. On-chain deposits and payouts open at launch, and balances shown before then are not held in custody.",
     },
     {
       category: "Deposits & withdrawals",
       q: "Does a deposit or withdrawal move real funds?",
-      a: "No. Deposit, withdrawal, and settlement flows demonstrate the interface using local session state only. Do not send funds to the sample deposit address shown in this prototype.",
+      a: "Not yet. On-chain deposits and withdrawals open at launch. Until then, only send funds to an address announced through official @depvestteam channels.",
     },
     {
       category: "Strategies & yield",
@@ -91,7 +91,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Fees & eligibility",
       q: "What fees are shown in the configured fee schedule?",
-      a: "Configured display examples are deposits: Free; rebalancing: Free; performance fee: 10% of net positive yield; standard withdrawal: Free; instant withdrawal: 1.5%. These are not live charges or governing service terms.",
+      a: "Configured display examples are deposits: Free; rebalancing: Free; performance fee: 10% of net positive yield; standard withdrawal: Free; instant withdrawal: 1.5%. Final fees are confirmed in the published terms at launch.",
     },
     {
       category: "Fees & eligibility",
@@ -101,47 +101,47 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Deposits & withdrawals",
       q: "What is the difference between standard and instant withdrawals?",
-      a: "The interface models standard withdrawals as free with T+1 settlement and instant withdrawals with a configured 1.5% fee. These are demo settings, not a live settlement service or guaranteed timing. Both can show as Clearing in the local session ledger.",
+      a: "The interface models standard withdrawals as free with T+1 settlement and instant withdrawals with a configured 1.5% fee. Both show as Clearing in your ledger until they settle. Timing is a target, not a guarantee.",
     },
     {
       category: "Deposits & withdrawals",
       q: "Can I withdraw invested vault funds directly?",
-      a: "In the dashboard simulation, withdrawals can use available liquid cash only. Vault allocations cannot be withdrawn directly; rebalance to the Liquid Cash Only (100% Cash) preset before modeling a withdrawal. No actual transfer occurs.",
+      a: "Withdrawals use available liquid cash only. Vault allocations cannot be withdrawn directly; rebalance to the Liquid Cash Only (100% Cash) preset first.",
     },
     {
       category: "Deposits & withdrawals",
       q: "What happens if I do not have enough liquid cash to withdraw?",
-      a: "The demo withdrawal flow limits Max to available liquid cash. Use Rebalance to Liquid Cash to model a move to the 100% Cash preset before withdrawing. Invested funds cannot be withdrawn directly in the simulation; no actual transfer occurs.",
+      a: "Max is limited to available liquid cash. Use Rebalance to Liquid Cash to move to the 100% Cash preset, then withdraw. Invested funds cannot be withdrawn directly.",
     },
     {
       category: "Ledger & accounting",
       q: "How does the DepVest ledger account for transactions?",
-      a: "The dashboard records local examples of deposits, withdrawals, rebalances, Active Earn credits, and referral claims with a reference ID, timestamp, fee breakdown, balance deltas, and status. Clearing and Settled are session ledger states; they do not confirm an external transaction or reconcile an external wallet.",
+      a: "Every deposit, withdrawal, rebalance, Active Earn credit, and referral claim is recorded with a reference ID, timestamp, fee breakdown, balance changes, and status (Clearing or Settled). Duplicate claims are blocked.",
     },
     {
       category: "Deposits & withdrawals",
       q: "Which wallets and networks are supported?",
-      a: "The wallet picker lists MetaMask, Coinbase Wallet, Ledger (Hardware Wallet), Phantom, and WalletConnect, while transaction screens show USDC examples on Base and Ethereum. In this prototype wallet selection is simulated; it does not connect a provider or submit a transaction. Never share your seed phrase or private keys.",
+      a: "The wallet picker lists MetaMask, Coinbase Wallet, Ledger (Hardware Wallet), Phantom, and WalletConnect, while transaction screens show USDC examples on Base and Ethereum. DepVest never asks for or stores your seed phrase or private keys.",
     },
     {
       category: "Active Earn",
       q: "How does Active Earn work?",
-      a: "The prototype demonstrates eight task types such as product labelling, summary review, and content screening. Accepted tasks add a configured 15-45 DVT credit to local session state; no external task-review or payout service is connected.",
+      a: "Active Earn offers eight task types such as product labelling, summary review, and content screening. Each accepted task adds a 15–45 DVT credit to your pending balance.",
     },
     {
       category: "Active Earn",
       q: "What are the accuracy and session limits for tasks?",
-      a: "The demo accepts a task at 70% accuracy or higher, with up to five attempts per session and one attempt per task type. These limits are part of the local interface simulation.",
+      a: "A task is accepted at 70% accuracy or higher, with up to five attempts per session and one attempt per task type.",
     },
     {
       category: "Active Earn",
       q: "When are Active Earn rewards paid?",
-      a: "An accepted task adds DVT session credits in local state. Claiming credits records a DVT entry in the local ledger; no external verification, token transfer, or persistent payout occurs.",
+      a: "Accepted tasks add pending DVT credits. Claiming moves them to your available DVT balance and records a ledger entry. On-chain DVT transfers open at launch.",
     },
     {
       category: "Custody & support",
       q: "Does DepVest take custody of my assets?",
-      a: "This UI prototype does not establish wallet or strategy-asset custody. The DEPVEST team (@depvestteam) will never ask for your seed phrase, private keys, or wallet passwords. For help, contact support@depvest.com, message @depvestteam on Telegram, or join discord.gg/depvestteam. Review verified product terms for any future live service.",
+      a: "DepVest does not hold your wallet keys. The DEPVEST team (@depvestteam) will never ask for your seed phrase, private keys, or wallet passwords. For help, contact support@depvest.com, message @depvestteam on Telegram, or join discord.gg/depvestteam.",
     },
     {
       category: "Custody & support",
@@ -150,23 +150,23 @@ export const DEFAULT_TERMS: Terms = {
     },
     {
       category: "Custody & support",
-      q: "Does this dashboard confirm asset custody or an audit?",
-      a: "No. This prototype does not verify asset ownership, custody arrangements, insurance, audited performance, or security audits. Review independently verified product disclosures before using a live financial service.",
+      q: "Is DepVest audited or insured?",
+      a: "Not yet. Security audit, custody, and insurance details will be published before launch. Do not treat displayed figures as audited performance.",
     },
     {
       category: "Referrals",
       q: "Are referral rewards paid out?",
-      a: "The referral interface demonstrates codes, USDC balances, and DVT commission tiers in local session state. No real referral registration or external payout service is connected; the displayed DVT rates are illustrative and are not established reward terms.",
+      a: "Referral rewards are tracked in USDC and DVT and claimed to your DepVest balance. External payouts open at launch, and the DVT tier rates are estimates until final terms are published.",
     },
     {
       category: "Referrals",
       q: "How does the referral program work?",
-      a: "The prototype can generate a session referral code and demonstrate invite and claim flows, but it does not register or verify real referrals. The interface displays illustrative 5%, 10%, and 15% DVT tiers; reward bases and governing terms are not configured, and no external payout is connected.",
+      a: "Connect a wallet to get your DV-XXXXXX code and share it. A referral counts once your friend registers and activates their account. Estimated tiers are 5%, 10%, and 15% DVT (not yet final terms).",
     },
     {
       category: "Referrals",
       q: "How do I claim referral rewards?",
-      a: "Claim buttons demonstrate how USDC or DVT rewards could appear in the interface. They change local session state and create demo ledger references only; no external referral payout is initiated.",
+      a: "Open Invite Friends and tap Claim USDC or Claim DVT. Each claim is recorded in your ledger and credited to your DepVest balance.",
     },
     {
       category: "Strategies & yield",

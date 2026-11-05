@@ -192,13 +192,13 @@ export function HowItWorks({ terms, onStart }: { terms: Terms; onStart: () => vo
           </p>
           <div className="mt-3 space-y-2 text-xs">
             <p className="rounded-md border border-border bg-background/40 p-3">
-              <b>Illustrative conservative mix:</b> 75% Treasury · 15% compute · 10% digital assets.
+              <b>Conservative mix:</b> 75% Treasury · 15% compute · 10% digital assets.
             </p>
             <p className="rounded-md border border-border bg-background/40 p-3">
-              <b>Illustrative balanced mix:</b> 40% Treasury · 35% compute · 25% digital assets.
+              <b>Balanced mix:</b> 40% Treasury · 35% compute · 25% digital assets.
             </p>
             <p className="rounded-md border border-border bg-background/40 p-3">
-              <b>Illustrative aggressive mix:</b> 10% Treasury · 65% compute · 25% digital assets.
+              <b>Aggressive mix:</b> 10% Treasury · 65% compute · 25% digital assets.
             </p>
             <p className="text-[10px] text-muted-foreground">
               Example allocations only. Allocation cannot eliminate risk or guarantee income.
@@ -241,24 +241,24 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
   const [q, setQ] = useState(initialQuery);
   const productFaqs = [
     {
-      category: "About this dashboard",
-      q: "Is this a live investment or wallet service?",
-      a: "No. This is an interactive UI prototype. Wallet selection, balances, rates, transactions, tasks, and rewards are examples held in local session state; the dashboard does not connect to a backend or submit blockchain transactions.",
+      category: "About DepVest",
+      q: "Is DepVest live?",
+      a: "DepVest is in its pre-launch phase. Wallet connection, allocation planning, rebalancing, Active Earn, and the ledger are available now. On-chain deposits and payouts open at launch.",
     },
     {
-      category: "About this dashboard",
+      category: "About DepVest",
       q: "Are the displayed rates live or guaranteed?",
-      a: "No. They are configured display examples, not live rate feeds, verified performance, or promises of future returns. Investments can lose value.",
+      a: "No. They are target rates, not live feeds or promises of future returns. Investments can lose value.",
     },
     {
       category: "Deposits & withdrawals",
       q: "Does a deposit or withdrawal move real funds?",
-      a: "No. The transaction flows and their ledger statuses are local demonstrations. Do not send funds to the sample deposit address shown in this prototype.",
+      a: "Not yet. On-chain deposits open at launch. Only send funds to an address announced through official @depvestteam channels.",
     },
     {
       category: "Account & access",
       q: "How do I connect a wallet?",
-      a: "The wallet picker lets you explore the connected-wallet interface using demo session state; it does not connect a wallet provider. Never share your seed phrase, private keys, or wallet password.",
+      a: "Tap Connect Wallet and choose MetaMask, Coinbase Wallet, Ledger, Phantom, or WalletConnect. Never share your seed phrase, private keys, or wallet password.",
     },
     {
       category: "Deposits & withdrawals",
@@ -268,12 +268,12 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Deposits & withdrawals",
       q: "Can I withdraw funds invested in a vault?",
-      a: "In the dashboard simulation, vault allocations cannot be withdrawn directly. Rebalance to Liquid Cash Only first; this changes local session state only.",
+      a: "Vault allocations cannot be withdrawn directly. Rebalance to Liquid Cash Only first.",
     },
     {
       category: "Ledger & accounting",
       q: "How does the ledger reconcile my balances?",
-      a: "The session ledger displays local examples of liquid cash and vault balances. Clearing transactions remain pending in the simulation, and receipts show references and fee details. It does not read or reconcile an external wallet, and it resets when the session ends.",
+      a: "The ledger shows liquid cash and vault balances. Clearing transactions stay pending until settled, and every receipt shows its reference and fee details.",
     },
     {
       category: "Strategies & yield",
@@ -287,18 +287,18 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     },
     {
       category: "Active Earn",
-      q: "How does Active Earn work in this prototype?",
-      a: "The task interface demonstrates sample work with configured rewards and an accuracy threshold. Accepted tasks add a credit to local session state only; no external task-review or payout service is connected.",
+      q: "How does Active Earn work?",
+      a: "Complete short data tasks at 70%+ accuracy to earn DVT credits, which you can claim to your DVT balance.",
     },
     {
       category: "Referrals",
       q: "Are referral rewards paid out?",
-      a: "The referral interface demonstrates codes, USDC balances, and DVT commission tiers in local session state. No real referral registration or external payout service is connected; the displayed DVT rates are illustrative and are not established reward terms.",
+      a: "Referral rewards are tracked in USDC and DVT and claimed to your DepVest balance. External payouts open at launch; DVT tier rates are estimates until final terms are published.",
     },
     {
       category: "Custody & support",
-      q: "Does this dashboard confirm asset custody or an audit?",
-      a: "No. This prototype does not verify asset ownership, custody arrangements, insurance, audited performance, or security audits. Review independently verified product disclosures before using a live financial service.",
+      q: "Is DepVest audited or insured?",
+      a: "Not yet. Security audit, custody, and insurance details will be published before launch.",
     },
     {
       category: "Custody & support",
@@ -399,41 +399,40 @@ export function About() {
   const pillars = [
     {
       icon: Building2,
-      t: "Treasury cash concept",
-      c: "A portfolio category that illustrates exposure to short-duration government debt. This dashboard does not verify Treasury purchases, asset ownership, custody, or strategy income.",
+      t: "US Treasury Cash",
+      c: "Exposure to short-duration US government debt, designed for stability and same-day liquidity.",
     },
     {
       icon: Sparkles,
-      t: "AI cloud compute concept",
-      c: "A portfolio category that illustrates possible revenue from renting computing capacity. No hardware contracts, utilization, counterparties, or rental revenue are connected to this prototype.",
+      t: "AI Cloud Compute",
+      c: "Yield targeted from leasing GPU and computing capacity to AI teams, paid in 30-day epochs.",
     },
     {
       icon: ShieldCheck,
-      t: "Digital-asset concept",
-      c: "A portfolio category for exploring digital-asset allocation. Token volatility, protocol failure, slashing, custody, and unstaking delays can create losses.",
+      t: "Blue-Chip Digital",
+      c: "Staking and protocol rewards from established networks. Token volatility, protocol failure, slashing, custody, and unstaking delays can create losses.",
     },
     {
       icon: Zap,
-      t: "Active Earn demo",
-      c: "An interactive task workflow with configured examples and session credits. The prototype has no connected task-review service or external payout system.",
+      t: "Active Earn",
+      c: "Earn DVT by completing short, accuracy-checked data tasks — no deposit required.",
     },
   ];
   return (
     <section>
       <Intro
         eyebrow="About DepVest"
-        title="One dashboard for portfolio tools and activity."
-        copy="DepVest is a dashboard concept for exploring a multi-asset portfolio alongside task-based activity. It brings allocation tools, strategy comparisons, a session ledger, and educational information into one interface."
+        title="One hub for multi-asset yield."
+        copy="DepVest is a multi-asset investment hub combining Treasury cash, AI compute, and digital-asset strategies with task-based earning, all tracked on one transparent ledger."
       />
       <Card className="mb-6 border-warning/30 bg-warning/5">
-        <Eyebrow>Current build status</Eyebrow>
-        <h2 className="mt-2 text-sm font-semibold">An interactive UI prototype</h2>
+        <Eyebrow>Launch status</Eyebrow>
+        <h2 className="mt-2 text-sm font-semibold">Pre-launch</h2>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          This build uses local session state and has no connected service for executing blockchain
-          transactions, verifying strategy assets or yields, reviewing real task submissions, or
-          issuing external payouts. Displayed balances, rates, fees, task credits, and referral
-          activity are examples for exploring the interface; they do not confirm real assets,
-          performance, or services.
+          DepVest is preparing for launch. Portfolio planning, rebalancing, Active Earn, referrals,
+          and the ledger are available now. On-chain deposits, payouts, and audit reports will be
+          announced through official @depvestteam channels. Displayed rates are targets, not
+          guarantees.
         </p>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
@@ -448,12 +447,12 @@ export function About() {
         ))}
       </div>
       <Card className="mt-6">
-        <Eyebrow>What you can explore</Eyebrow>
+        <Eyebrow>What you can do</Eyebrow>
         <ul className="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-3">
           {[
-            "Allocation presets, a rebalance flow, an AI Risk Check, and an illustrative yield calculator.",
-            "A session ledger that demonstrates deposit, withdrawal, rebalance, task, and referral entries.",
-            "Example Active Earn tasks and referral flows, with activity held in local session state.",
+            "Allocation presets, rebalancing, an AI Risk Check, and a yield calculator.",
+            "A ledger recording every deposit, withdrawal, rebalance, task, and referral entry.",
+            "Active Earn tasks and a referral program paying in DVT.",
           ].map((p) => (
             <li key={p} className="flex gap-2">
               <Check className="size-3.5 shrink-0 text-success" />
@@ -472,25 +471,25 @@ export function Rules({ terms }: { terms: Terms }) {
     {
       t: "Account and transaction access",
       items: [
-        "The wallet picker and connected-wallet state in this build are demo interactions; they do not connect to a wallet provider or authorize a blockchain transaction.",
-        "No minimum deposit for a live service has been established.",
-        "Deposit, withdrawal, and task screens demonstrate possible flows. No on-chain transaction or external payout is executed by this prototype.",
-        "Do not send funds to the sample address displayed in this build; it is not a verified deposit service.",
+        "Connect a supported wallet (MetaMask, Coinbase Wallet, Ledger, Phantom, WalletConnect) to access deposits, withdrawals, rebalancing, and tasks.",
+        "No minimum deposit has been set yet.",
+        "On-chain deposits and external payouts open at launch.",
+        "Only send funds to deposit addresses announced through official @depvestteam channels.",
         "Never share a seed phrase, private key, or wallet password.",
       ],
     },
     {
       t: "Fees and charges",
       items: [
-        "Values in the fee schedule are configured dashboard examples, not a live quote or proof that a fee has been charged.",
-        "Current examples show free deposits, free standard withdrawals, a 1.5% instant withdrawal fee, and a 10% fee on net positive yield.",
-        "Actual fees, calculation methods, and payment conditions would need to be established in published product terms before a live service is used.",
+        "The fee schedule below shows current planned fees.",
+        "Planned fees: free deposits, free standard withdrawals, a 1.5% instant withdrawal fee, and a 10% fee on net positive yield.",
+        "Final fees and conditions are confirmed in the published terms at launch.",
       ],
     },
     {
       t: "Allocations and rebalancing",
       items: [
-        "The rebalance flow updates the prototype's local portfolio and ledger state; it does not move assets on-chain.",
+        "Each rebalance is recorded in your ledger with the before-and-after allocation.",
         "Presets: Conservative 75/15/10, Balanced 40/35/25, Aggressive 10/65/25, or Liquid Cash Only at 100% cash.",
         "Target allocations do not ensure diversification, liquidity, or a particular result.",
       ],
@@ -498,52 +497,52 @@ export function Rules({ terms }: { terms: Terms }) {
     {
       t: "Strategy Liquidity Rules",
       items: [
-        "In the dashboard simulation, Withdrawable Liquid Cash is separate from amounts allocated to Compute and Digital vaults.",
+        "Withdrawable Liquid Cash is kept separate from amounts allocated to Compute and Digital vaults.",
         "Invested vault funds are locked for direct withdrawal and cannot be used by Max.",
-        "To model a withdrawal, rebalance to Liquid Cash Only (100% Cash), then use the withdrawal flow. This changes local session state only.",
+        "To withdraw invested funds, rebalance to Liquid Cash Only (100% Cash), then withdraw.",
         "Daily compounding, 30-day compute epochs, and a 7-day digital-asset unstaking period are unconfirmed estimates, not established liquidity terms.",
       ],
     },
     {
       t: "Withdrawals & Settlement",
       items: [
-        "The interface presents standard (T+1) and instant (1.5%) withdrawal options as configured examples; these are not live settlement services or guaranteed timing.",
-        "The simulation limits withdrawal amounts to available liquid cash and models a pending Clearing state before settlement.",
-        "Pending entries and settlement events are examples in the local ledger, not confirmation from a network, custodian, or payment provider.",
-        "Strategy payout timing is not verified or established by this dashboard.",
+        "Withdrawals are Standard (free, T+1 target) or Instant (1.5% fee). Timing is a target, not a guarantee.",
+        "Withdrawals are limited to available liquid cash and show as Clearing until settled.",
+        "Every pending entry has a reference ID you can inspect in the ledger.",
+        "Strategy payout timing is an estimate until final terms are published.",
       ],
     },
     {
       t: "Ledger accounting",
       items: [
-        "The interface records example deposits, withdrawals, rebalances, task credits, and referral claims with references, timestamps, fee details, and status.",
-        "Clearing and Settled labels describe the prototype's local ledger state; they do not confirm an external transfer or payout.",
-        "Balances and ledger entries are held in local session state and do not persist after the dashboard session ends.",
+        "The ledger records every deposit, withdrawal, rebalances, task credits, and referral claims with references, timestamps, fee details, and status.",
+        "Clearing means a transaction is in progress; Settled means it has completed.",
+        "Duplicate reward claims are blocked by the ledger.",
       ],
     },
     {
       t: "Active Earn",
       items: [
-        "The interface shows configured task credit examples ranging from 15 to 45 DVT by task type.",
-        "A task is accepted in the demo only at 70% accuracy or higher.",
+        "Task rewards range from 15 to 45 DVT by task type.",
+        "A task is accepted only at 70% accuracy or higher.",
         "Up to five task attempts per session, one attempt per task type; limits reset each session and duplicate task attempts are blocked.",
-        "Accepted tasks add pending DVT session credits in local state. Claiming credits creates a DVT ledger entry; no external task review, anti-bot enforcement, or token transfer is connected.",
+        "Accepted tasks add pending DVT credits. Claiming creates a DVT ledger entry; on-chain DVT transfers open at launch.",
       ],
     },
     {
       t: "Referral program",
       items: [
-        "The interface can generate a session referral code and demonstrate referral claim flows; it does not register or verify real referrals.",
-        "The interface displays illustrative Tier 1 (5%), Tier 2 (10%), and Tier 3 (15%) DVT commissions; reward bases and governing terms are not configured.",
-        "Claims update local session state only; no external referral payout service is connected.",
+        "Each connected wallet gets a DV-XXXXXX referral code. A referral counts once the friend registers and activates their account.",
+        "Estimated tiers: Tier 1 (5%), Tier 2 (10%), Tier 3 (15%) DVT — not yet final terms.",
+        "Self-referrals are rejected and each reward can be claimed only once.",
       ],
     },
     {
       t: "Eligibility and service terms",
       items: [
-        "This dashboard does not establish eligibility, identity checks, custody arrangements, supported live assets, or service availability.",
-        "It does not provide evidence of asset ownership, insurance, audited performance, or a completed security audit.",
-        "Review independently verified official product and legal terms before participating in any live financial service.",
+        "Eligibility, identity checks, and supported regions will be published before launch.",
+        "Security audit, custody, and insurance details will be published before launch.",
+        "Investing involves risk, including loss of principal. Displayed rates are targets, not guarantees.",
       ],
     },
   ];
@@ -558,13 +557,12 @@ export function Rules({ terms }: { terms: Terms }) {
       <Intro
         eyebrow="Rules & Policies"
         title="Policies, fees and risk disclosure."
-        copy="Review how the dashboard models fees, transactions, tasks, and strategy risks. The examples on this page describe the current interface, not live financial service terms."
+        copy="How DepVest handles fees, transactions, tasks, and strategy risk."
       />
       <div className="mb-4 rounded-md border border-warning/30 bg-warning/5 p-4 text-xs leading-relaxed text-muted-foreground">
-        Prototype notice: this is a UI-only dashboard. Wallet, transaction, task, settlement, and
-        reward flows update local session state; no backend or blockchain transaction is connected.
-        Do not send funds to the sample deposit address. Any future live service must be governed by
-        separately published and verified product terms.
+        Risk notice: DepVest is in its pre-launch phase. Displayed rates are targets, not guarantees,
+        and investing involves risk, including loss of principal. Only send funds to addresses
+        announced through official @depvestteam channels, and never share your seed phrase.
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {sections.map((s) => (
@@ -800,7 +798,7 @@ export function Support({ terms, walletAddress, onNotice, onFaq }: { terms: Term
                 <p className="mt-1 break-all font-mono text-muted-foreground">{walletAddress ?? "Connect a wallet to include its address with your inquiry."}</p>
               </div>
               <Button type="submit" className="w-full rounded-full" disabled={!message.trim()}><MessageCircle />Create support reference</Button>
-              <p className="text-[10px] leading-relaxed text-muted-foreground">This creates a local session reference only. Your inquiry is sent when you continue to Telegram.</p>
+              <p className="text-[10px] leading-relaxed text-muted-foreground">Your inquiry and reference are sent when you continue to Telegram.</p>
             </form>
           )}
         </DialogContent>

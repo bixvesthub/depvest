@@ -51,8 +51,8 @@ export function DvtModal({ open, onOpenChange }: DvtModalProps) {
             DVT Tokenomics &amp; Roadmap
           </DialogTitle>
           <DialogDescription>
-            Current utility concepts and proposed release phases. This dashboard does not issue or
-            trade a blockchain token.
+            Planned DVT utility and release phases. DVT is tracked on the DepVest ledger until
+            its on-chain launch.
           </DialogDescription>
         </DialogHeader>
 
