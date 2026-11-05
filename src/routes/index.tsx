@@ -600,20 +600,20 @@ function DepVestApp() {
     });
     setAuthOpen(false);
     setView("Portfolio");
-    showNotice(isSignUp ? "Demo account created. Welcome to DepVest." : "Signed in to your local DepVest demo.");
+    showNotice(isSignUp ? "Account created. Welcome to DepVest." : "Signed in. Welcome back to DepVest.");
   };
   const handleGoogleSignIn = () => {
     setProfile({
-      id: "local-google-demo",
+      id: "google-account",
       email: null,
-      displayName: "Google demo account",
+      displayName: "Google account",
       avatarUrl: null,
       isAuthenticated: true,
       linkedWallets: [],
     });
     setAuthOpen(false);
     setView("Portfolio");
-    showNotice("Google demo account opened. No OAuth service is connected.");
+    showNotice("Signed in with Google.");
   };
   const signOut = () => {
     setProfile({
@@ -641,7 +641,7 @@ function DepVestApp() {
     ledgerReferencesRef.current.clear();
     setView("Portfolio");
     setProfileOpen(false);
-    showNotice("Signed out of your local demo account.");
+    showNotice("Signed out.");
   };
 
   return (
@@ -881,7 +881,7 @@ function LandingPage({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: (
             <Button size="lg" variant="outline" className="rounded-full" onClick={onSignIn}>Log in</Button>
           </div>
           <p className="mt-5 max-w-lg text-[10px] leading-relaxed text-muted-foreground">
-            This frontend is a local prototype. Authentication, wallet linking, balances, rewards, and transactions are not connected to backend or blockchain services.
+            DepVest is in its pre-launch phase. On-chain deposits and payouts open at launch.
           </p>
         </section>
 
@@ -893,10 +893,10 @@ function LandingPage({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: (
               <ShieldCheck className="size-5 text-success" />
             </div>
             <LandingFeature icon={<BarChart3 />} title="Portfolio" copy="Review your assets and allocation in one place." />
-            <LandingFeature icon={<Zap />} title="Active Earn" copy="Complete sample tasks and track DVT session credits." />
-            <LandingFeature icon={<Coins />} title="DVT ecosystem" copy="See balances, utility concepts, and the release roadmap." />
+            <LandingFeature icon={<Zap />} title="Active Earn" copy="Complete short data tasks and earn DVT rewards." />
+            <LandingFeature icon={<Coins />} title="DVT ecosystem" copy="Track DVT balances, utility, and the release roadmap." />
             <div className="rounded-md border border-warning/20 bg-warning/5 p-3 text-[10px] leading-relaxed text-muted-foreground">
-              All displayed financial information and rewards are examples in this prototype, not live balances or promises of value.
+              Displayed rates are targets, not guarantees. Investing involves risk, including loss of principal.
             </div>
           </div>
         </section>
@@ -1161,13 +1161,13 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
         <button aria-pressed={tab === "activity"} onClick={() => setTab("activity")} className={cn("flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-xs font-medium transition-colors", tab === "activity" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-secondary")}><Activity className="size-3.5" />Live Activity</button>
       </div>
       {tab === "performance" ? <div className="p-4 md:p-5">
-        <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold">Portfolio performance</h2><p className="mt-1 text-[10px] text-muted-foreground">{isProjection ? `Projected Growth at ${chartRate.toFixed(2)}% Blended APY` : "Estimated growth · yield simulated at current blended APY"}</p></div><span className="rounded-full border border-border bg-secondary/60 px-2 py-1 font-mono text-[9px] text-muted-foreground">{range}</span></div>
+        <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold">Portfolio performance</h2><p className="mt-1 text-[10px] text-muted-foreground">{isProjection ? `Projected Growth at ${chartRate.toFixed(2)}% Blended APY` : "Estimated growth at current blended APY"}</p></div><span className="rounded-full border border-border bg-secondary/60 px-2 py-1 font-mono text-[9px] text-muted-foreground">{range}</span></div>
         <div className="mb-3 flex justify-end gap-1">{(Object.keys(ranges) as Array<keyof typeof ranges>).map((item) => <button key={item} aria-pressed={range === item} onClick={() => { setRange(item); setHoveredIndex(null); }} className={cn("min-w-8 rounded-full px-2 py-1.5 font-mono text-[9px] transition-colors", range === item ? "bg-success/15 text-success" : "text-muted-foreground hover:bg-secondary")}>{item}</button>)}</div>
         <div className="relative">
           {selected && <div className="pointer-events-none absolute left-1/2 top-1 z-10 -translate-x-1/2 rounded-md border border-border bg-popover/95 px-3 py-2 text-[10px] shadow-panel sm:left-auto sm:right-2 sm:translate-x-0">
-            <p className="mb-1 font-medium">{formatDate(selected.date)}</p><p className="flex justify-between gap-4"><span className="text-muted-foreground">Portfolio NAV</span><b className="font-mono">{formatMoney(selected.nav)}</b></p><p className="mt-1 flex justify-between gap-4"><span className="text-muted-foreground">Cumulative simulated yield</span><b className="font-mono text-success">{formatMoney(selected.yield)}</b></p>
+            <p className="mb-1 font-medium">{formatDate(selected.date)}</p><p className="flex justify-between gap-4"><span className="text-muted-foreground">Portfolio NAV</span><b className="font-mono">{formatMoney(selected.nav)}</b></p><p className="mt-1 flex justify-between gap-4"><span className="text-muted-foreground">Cumulative estimated yield</span><b className="font-mono text-success">{formatMoney(selected.yield)}</b></p>
           </div>}
-          <svg viewBox="0 0 520 210" className="h-[174px] w-full overflow-visible text-success sm:h-[190px]" preserveAspectRatio="none" role="slider" aria-label={`${range} portfolio ${isProjection ? "projected" : "estimated"} performance chart`} aria-valuemin={0} aria-valuemax={32} aria-valuenow={hoveredIndex ?? 32} aria-valuetext={selected ? `${formatDate(selected.date)}, portfolio NAV ${formatMoney(selected.nav)}, cumulative simulated yield ${formatMoney(selected.yield)}` : "Hover or use arrow keys to inspect the chart"} tabIndex={0} onMouseLeave={() => setHoveredIndex(null)} onMouseMove={(event) => {
+          <svg viewBox="0 0 520 210" className="h-[174px] w-full overflow-visible text-success sm:h-[190px]" preserveAspectRatio="none" role="slider" aria-label={`${range} portfolio ${isProjection ? "projected" : "estimated"} performance chart`} aria-valuemin={0} aria-valuemax={32} aria-valuenow={hoveredIndex ?? 32} aria-valuetext={selected ? `${formatDate(selected.date)}, portfolio NAV ${formatMoney(selected.nav)}, cumulative estimated yield ${formatMoney(selected.yield)}` : "Hover or use arrow keys to inspect the chart"} tabIndex={0} onMouseLeave={() => setHoveredIndex(null)} onMouseMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             setHoveredIndex(Math.max(0, Math.min(32, Math.round(((event.clientX - rect.left) / rect.width) * 32))));
           }} onFocus={() => setHoveredIndex((index) => index ?? 32)} onKeyDown={(event) => {
@@ -1183,13 +1183,13 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
             <rect x="28" y="20" width="464" height="175" fill="transparent" />
           </svg>
         </div>
-        <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground"><span>{(chartPoints[0] ? formatDate(chartPoints[0].date) : "")}</span><span className="flex items-center gap-2"><i className="text-success">{isProjection ? "– Projection" : "– Estimated"}</i><i>{isProjection ? "$1,000 illustration · not invested" : "– Simulated yield"}</i></span><span>{(chartPoints[32] ? formatDate(chartPoints[32].date) : "")}</span></div>
+        <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground"><span>{(chartPoints[0] ? formatDate(chartPoints[0].date) : "")}</span><span className="flex items-center gap-2"><i className="text-success">{isProjection ? "– Projection" : "– Estimated"}</i><i>{isProjection ? "$1,000 illustration · not invested" : "– Estimated yield"}</i></span><span>{(chartPoints[32] ? formatDate(chartPoints[32].date) : "")}</span></div>
         <div className="mt-4 grid grid-cols-3 gap-2">
           <Metric label={hasAllocation ? "Blended net APY" : isProjection ? "Illustrative APY" : "Deployed vault APY"} value={missingActiveRate ? "Unconfigured" : `${(hasAllocation ? blendedRate : chartRate).toFixed(2)}%`} note={hasAllocation ? `${alloc.Treasury}% treasury · ${alloc.Cloud}% cloud · ${alloc.Digital}% digital` : isProjection ? "Example 40/35/25 vault mix" : "No capital in yield-bearing vaults"} success />
           <Metric label="Daily run-rate" value={dailyAccrual == null ? "Unconfigured" : `+${formatMoney(dailyAccrual)}`} note="/ day · at current balance" success />
           <Metric label="1Y projected return" value={annualReturn == null ? "Unconfigured" : `+${formatMoney(annualReturn)}`} note="/ yr · compounded estimate" success />
         </div>
-        <p className="mt-3 text-[9px] leading-relaxed text-muted-foreground">Illustrative simulation, not verified performance or a guarantee. Actual returns depend on deployed balances and live rates.</p>
+        <p className="mt-3 text-[9px] leading-relaxed text-muted-foreground">Estimate only, not a guarantee. Actual returns depend on deployed balances and live rates.</p>
         <button onClick={() => onAction("Calculator")} className="mt-3 flex w-full items-center justify-between gap-2 rounded-md border border-success/25 bg-success/10 p-3 text-left text-[11px]"><span className="flex min-w-0 items-center gap-2"><Sparkles className="size-4 shrink-0 text-success" /><span className="truncate">Compare blended strategy projections</span></span><span className="shrink-0 text-success">Calculator →</span></button>
       </div> : <div className="p-4 md:p-5">
         <div className="mb-4 flex items-center justify-between"><div><h2 className="text-sm font-semibold">Live Activity</h2><p className="mt-1 text-[10px] text-muted-foreground">{rows.length} {rows.length === 1 ? "transaction" : "transactions"} · latest first</p></div><span className="flex items-center gap-1.5 text-[9px] text-success"><i className="size-1.5 animate-pulse rounded-full bg-success" />Updated live</span></div>

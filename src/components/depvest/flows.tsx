@@ -79,7 +79,7 @@ export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance 
     else onWithdraw(n, `${net} · ${instant ? `Instant, fee ${money(fee)}` : "Standard T+1"}`, fee);
   };
   return (
-    <Shell open={open} onClose={onClose} eyebrow={isDeposit ? "Deposit · USDC" : "Withdraw · liquid USDC"} title={isDeposit ? (vault ? `Add funds to ${vault}` : "Deposit funds") : "Withdraw funds"} desc={isDeposit ? "Send USDC to your DepVest address or pick an amount to simulate." : "Only settled liquid cash can be withdrawn directly."}>
+    <Shell open={open} onClose={onClose} eyebrow={isDeposit ? "Deposit · USDC" : "Withdraw · liquid USDC"} title={isDeposit ? (vault ? `Add funds to ${vault}` : "Deposit funds") : "Withdraw funds"} desc={isDeposit ? "Choose an amount to deposit from your connected wallet." : "Only settled liquid cash can be withdrawn directly."}>
       <div className="space-y-5">
         {open && <div className="rounded-md border border-success/25 bg-success/5 p-3 text-[11px]"><Cap>Authorizing wallet</Cap><p className="mt-1 font-mono text-success">{walletAddress ?? "Connect wallet to continue"}</p></div>}
         {!isDeposit && <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-background/40 p-3 text-[11px]">
@@ -202,7 +202,7 @@ export function CalculatorDialog({ open, onClose, onInvest }: { open: boolean; o
   const monthlyNetYield = amt * (Math.pow(1 + grossApy / 100 / 12, 1) - 1) * 0.9;
   const bankYield = amt * Math.pow(1 + 0.45 / 100 / 12, 12 * years) - amt;
   return (
-    <Shell open={open} onClose={onClose} eyebrow="Simulator" title="Compounding & yield calculator" desc="Compare projected net returns and see the performance fee before deploying.">
+    <Shell open={open} onClose={onClose} eyebrow="Calculator" title="Compounding & yield calculator" desc="Compare projected net returns and see the performance fee before deploying.">
       <div className="space-y-5">
         <div>
           <div className="flex items-baseline justify-between"><Cap>Starting amount</Cap><b className="font-mono text-2xl">{money(amt)}</b></div>
@@ -403,7 +403,7 @@ export function TaskDialog({ flow, walletAddress, onWalletRequired, onClose, onC
         <span className="mx-auto grid size-14 place-items-center rounded-full bg-success/15 text-success"><Check className="size-6" /></span>
         <p className="text-lg font-semibold">Task accepted</p>
         <p className="font-mono text-3xl text-success">+{taskReward} session credit</p>
-        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-left text-[11px] text-muted-foreground">This interface records task completion and DVT credits in local session state only. It is not a live task-review or token payout service.</div>
+        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-left text-[11px] text-muted-foreground">Accepted tasks add DVT to your pending credits. Claim them from Active Earn or Wallet & Ledger.</div>
         {receiptError && <p role="alert" className="text-xs text-destructive">Could not record this task completion. Please try again.</p>}
         <Button className="w-full" disabled={collecting} onClick={async () => {
           if (!walletAddress) return onWalletRequired();

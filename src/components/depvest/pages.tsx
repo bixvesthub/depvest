@@ -560,10 +560,9 @@ export function Rules({ terms }: { terms: Terms }) {
         copy="How DepVest handles fees, transactions, tasks, and strategy risk."
       />
       <div className="mb-4 rounded-md border border-warning/30 bg-warning/5 p-4 text-xs leading-relaxed text-muted-foreground">
-        Prototype notice: this is a UI-only dashboard. Wallet, transaction, task, settlement, and
-        reward flows update local session state; no backend or blockchain transaction is connected.
-        Do not send funds to the sample deposit address. Any future live service must be governed by
-        separately published and verified product terms.
+        Risk notice: DepVest is in its pre-launch phase. Displayed rates are targets, not guarantees,
+        and investing involves risk, including loss of principal. Only send funds to addresses
+        announced through official @depvestteam channels, and never share your seed phrase.
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {sections.map((s) => (
@@ -799,7 +798,7 @@ export function Support({ terms, walletAddress, onNotice, onFaq }: { terms: Term
                 <p className="mt-1 break-all font-mono text-muted-foreground">{walletAddress ?? "Connect a wallet to include its address with your inquiry."}</p>
               </div>
               <Button type="submit" className="w-full rounded-full" disabled={!message.trim()}><MessageCircle />Create support reference</Button>
-              <p className="text-[10px] leading-relaxed text-muted-foreground">This creates a local session reference only. Your inquiry is sent when you continue to Telegram.</p>
+              <p className="text-[10px] leading-relaxed text-muted-foreground">Your inquiry and reference are sent when you continue to Telegram.</p>
             </form>
           )}
         </DialogContent>

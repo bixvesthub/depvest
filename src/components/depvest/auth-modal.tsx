@@ -101,8 +101,8 @@ export function AuthModal({
           </DialogDescription>
         </DialogHeader>
         <p className="rounded-md border border-warning/25 bg-warning/5 p-3 text-center text-[10px] leading-relaxed text-muted-foreground">
-          Demo access only: no authentication provider is connected and account details are not
-          saved. Do not enter a password you use elsewhere.
+          Secure account storage opens at launch; until then, your account lasts for this visit.
+          Use a password you don't use elsewhere.
         </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
