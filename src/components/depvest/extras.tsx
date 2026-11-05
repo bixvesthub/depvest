@@ -165,7 +165,7 @@ export function NotificationsPopover() {
 
 /* ---------------- Profile ---------------- */
 
-export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConnect, onDisconnect, onInvite, onCopyReferral, onNotice }: {
+export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConnect, onDisconnect, onInvite, onCopyReferral, onNotice, onAuth, isAuthenticated }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   wallet: string | null;
@@ -175,6 +175,8 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
   onInvite: () => void;
   onCopyReferral: () => void;
   onNotice: (m: string) => void;
+  onAuth: () => void;
+  isAuthenticated: boolean;
 }) {
   const [prefs, setPrefs] = useState({ yield: true, rebalance: true, security: true });
   const toggle = (k: keyof typeof prefs) => setPrefs((p) => ({ ...p, [k]: !p[k] }));
@@ -224,6 +226,7 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
           </section>
 
           <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={onAuth}><Users />{isAuthenticated ? "Manage account" : "Access account"}</Button>
             <Button variant="outline" onClick={onInvite}><UserPlus />Invite friends</Button>
             <Button variant="outline" onClick={() => onNotice("Tax report CSV prepared")}><ArrowDownToLine />Export CSV</Button>
           </div>
@@ -261,6 +264,7 @@ export type Receipt = {
   network?: string;
   simulatedBlockNumber?: number;
   transactionType?: string;
+  asset?: "USDC" | "DVT";
 } | null;
 
 export type SettlementProgress = {
@@ -272,6 +276,10 @@ export type SettlementProgress = {
 };
 
 const receiptMoney = (amount: number) => `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const receiptAssetAmount = (amount: number, asset: "USDC" | "DVT" = "USDC") =>
+  asset === "DVT"
+    ? `${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DVT`
+    : receiptMoney(amount);
 const receiptAmount = (value: string) => Number(value.replace(/[^0-9.-]/g, "")) || 0;
 
 export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt; onClose: () => void; onNotice: (m: string) => void }) {
@@ -301,9 +309,9 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
       `Transaction hash: ${receipt.transactionHash ?? "Not recorded"}`,
       `UTC date: ${timestamp == null ? "Not recorded" : new Date(timestamp).toISOString().slice(0, 10)}`,
       `Local time: ${timestamp == null ? "Not recorded" : new Date(timestamp).toLocaleString()}`,
-      `Gross amount: ${receiptMoney(gross)}`,
-      `DepVest fee: ${receiptMoney(fee)}${fee > 0 && receipt.settlementTier === "Express" ? " (1.5% Instant fee)" : ""}`,
-      `Net settled amount: ${receiptMoney(settled)}`,
+      `Gross amount: ${receiptAssetAmount(gross, receipt.asset)}`,
+      `DepVest fee: ${receiptAssetAmount(fee, receipt.asset)}${fee > 0 && receipt.settlementTier === "Express" ? " (1.5% Instant fee)" : ""}`,
+      `Net settled amount: ${receiptAssetAmount(settled, receipt.asset)}`,
       `Allocation: ${allocation}`,
       `Network: ${receipt.network ?? "Base"} · Simulated block #${receipt.simulatedBlockNumber ?? "—"}`,
       `Vault: ${receipt.vaultId ?? "DepVest portfolio"}`,
@@ -342,14 +350,14 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
               <Row k="Transaction hash" v={<span className="flex max-w-[65%] items-center gap-2"><span className="break-all font-mono text-[10px]">{receipt.transactionHash ?? "Not recorded"}</span>{receipt.transactionHash && <button type="button" aria-label="Copy transaction hash" className="shrink-0 text-success" onClick={() => void copyValue(receipt.transactionHash!, "Transaction hash")}><Copy className="size-3.5" /></button>}</span>} />
               <Row k="UTC date" v={timestamp == null ? "Not recorded" : new Date(timestamp).toISOString().slice(0, 10)} />
               <Row k="Local time" v={timestamp == null ? "Not recorded" : new Date(timestamp).toLocaleString()} />
-              <div className="border-t border-border pt-3"><Row k="Gross amount" v={<span className="font-mono">{receiptMoney(gross)}</span>} /></div>
-              <Row k="Fee deduction" v={<span className="text-right font-mono">{receiptMoney(fee)}{fee > 0 && receipt.settlementTier === "Express" && <span className="ml-1 block font-sans text-[9px] text-muted-foreground">1.5% Instant fee</span>}</span>} />
-              <Row k="Net settled amount" v={<span className="font-mono font-semibold text-success">{receiptMoney(settled)}</span>} />
+              <div className="border-t border-border pt-3"><Row k="Gross amount" v={<span className="font-mono">{receiptAssetAmount(gross, receipt.asset)}</span>} /></div>
+              <Row k="Fee deduction" v={<span className="text-right font-mono">{receiptAssetAmount(fee, receipt.asset)}{fee > 0 && receipt.settlementTier === "Express" && <span className="ml-1 block font-sans text-[9px] text-muted-foreground">1.5% Instant fee</span>}</span>} />
+              <Row k="Net settled amount" v={<span className="font-mono font-semibold text-success">{receiptAssetAmount(settled, receipt.asset)}</span>} />
               {receipt.allocation && <Row k="Strategy allocation" v={<span className="text-right text-[10px]">Unallocated {receipt.allocation.Unallocated}%<br />US Treasury {receipt.allocation.Treasury}%<br />AI Compute {receipt.allocation.Cloud}%<br />Blue-Chip {receipt.allocation.Digital}%</span>} />}
               <Row k="Network · simulated block" v={<span>{receipt.network ?? "Base"} #{receipt.simulatedBlockNumber ?? "—"}</span>} />
               <Row k="Vault / destination" v={receipt.vaultId ?? "DepVest portfolio"} />
               <Row k="Settlement tier" v={receipt.settlementTier ?? "Standard T+1"} />
-              <Row k="Network fee" v={receipt.feeBreakdown?.network == null ? "Shown by wallet" : receiptMoney(receipt.feeBreakdown.network)} />
+              <Row k="Network fee" v={receipt.feeBreakdown?.network == null ? "Shown by wallet" : receiptAssetAmount(receipt.feeBreakdown.network, receipt.asset)} />
               <Row k="Details" v={<span className="max-w-[65%] text-[10px]">{receipt.meta}</span>} />
             </dl>
             <div className="grid grid-cols-3 gap-2">
@@ -422,10 +430,11 @@ export function SettlementProgressDialog({ settlement, onMinimize, onClose, onVi
 
 /* ---------------- Invite friends ---------------- */
 
-export function InviteFriends({ referralCode, referralEarnings, pendingReferralEarnings, activeReferrals, appliedReferralCode, onNotice, onCopy, onApplyReferralCode, onAddPreviewActivatedReferral, onClaim }: {
+export function InviteFriends({ referralCode, referralEarnings, pendingReferralEarnings, pendingDvtRewards, activeReferrals, appliedReferralCode, onNotice, onCopy, onApplyReferralCode, onAddPreviewActivatedReferral, onClaim, onClaimDvt }: {
   referralCode: string | null;
   referralEarnings: number;
   pendingReferralEarnings: number;
+  pendingDvtRewards: number;
   activeReferrals: number;
   appliedReferralCode: string | null;
   onNotice: (m: string) => void;
@@ -433,6 +442,7 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
   onApplyReferralCode: (value: string) => void;
   onAddPreviewActivatedReferral: () => void;
   onClaim: () => void;
+  onClaimDvt: () => void;
 }) {
   const [referralInput, setReferralInput] = useState(() => typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref")?.toUpperCase() ?? "" : "");
   const link = referralCode && typeof window !== "undefined"
@@ -462,9 +472,9 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
   };
   return (
     <section>
-      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Claimed rewards move to your Available Cash and are recorded in your ledger." />
+      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Demo referral credits are shown in USDC; DVT commission tiers are displayed separately and are not yet configured for payout." />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Stat icon={<Gift />} label="Rewards earned" value={`$${referralEarnings.toFixed(2)}`} />
+        <Stat icon={<Gift />} label="USDC rewards earned" value={`$${referralEarnings.toFixed(2)}`} />
         <Stat icon={<Users />} label="Qualified referrals" value={String(activeReferrals)} />
         <Stat icon={<Check />} label="Activated accounts" value={String(activeReferrals)} />
         <Stat icon={<Sparkles />} label="Current tier" value={currentTier ? `Tier ${currentTier}` : "Not reached"} />
@@ -502,10 +512,11 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
                 <div key={t} className={cn("rounded-md border p-3", currentTier >= i + 1 ? "border-success/40 bg-success/10" : "border-border bg-background/30")}>
                   <p className="text-[10px] text-muted-foreground">{t}</p>
                   <p className={cn("mt-1 font-mono text-lg", currentTier >= i + 1 && "text-success")}>{p}</p>
-                  <p className="mt-1 text-[9px] text-muted-foreground">{r}</p>
+                  <p className="mt-1 text-[9px] text-muted-foreground">DVT commission · {r}</p>
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">Tier commissions: Tier 1 5% DVT · Tier 2 10% DVT · Tier 3 15% DVT.</p>
           </div>
 
           <div className="mt-6 rounded-md border border-border bg-background/40 p-4">
@@ -519,14 +530,15 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
         </div>
 
         <div className="rounded-[14px] border border-border bg-card">
-          <div className="border-b border-border p-5"><p className="text-sm font-semibold">Referral rewards</p><p className="mt-1 text-[10px] text-muted-foreground">Available to claim: ${pendingReferralEarnings.toFixed(2)}</p></div>
+          <div className="border-b border-border p-5"><p className="text-sm font-semibold">Referral rewards</p><p className="mt-1 text-[10px] text-muted-foreground">Available to claim: {pendingDvtRewards.toFixed(2)} DVT · ${pendingReferralEarnings.toFixed(2)} USDC</p></div>
           <div className="space-y-3 p-5">
-            <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Claim to Cash</Button>
-            <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards move into Available cash and appear in Wallet history.</p>
+            <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Claim USDC to Wallet</Button>
+            <Button variant="outline" className="w-full rounded-full" disabled={pendingDvtRewards <= 0} onClick={onClaimDvt}><Gift />Claim DVT to Wallet</Button>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards are recorded in the local session ledger. Referral DVT payout configuration is not connected.</p>
             <div className="border-t border-border pt-4">
               <p className="text-xs font-medium">Qualified referral check</p>
               <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">A referral counts only after your friend registers successfully and activates their account.</p>
-              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={onAddPreviewActivatedReferral}>Record qualified referral · $2.50</Button>
+              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={onAddPreviewActivatedReferral}>Record qualified referral · $2.50 USDC</Button>
             </div>
           </div>
         </div>

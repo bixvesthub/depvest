@@ -372,8 +372,9 @@ export function TaskDialog({ flow, walletAddress, onWalletRequired, onClose, onC
     setFactuality(null);
     setTone(null);
   };
+  const taskReward = `${flow.reward.toLocaleString("en-US", { maximumFractionDigits: 0 })} DVT`;
   return (
-    <Shell open onClose={onClose} eyebrow="Active Earn" title={flow.title} desc={`${money(flow.reward)} session credit if accepted · 70% accuracy required`}>
+    <Shell open onClose={onClose} eyebrow="Active Earn" title={flow.title} desc={`${taskReward} session credit if accepted · 70% accuracy required`}>
       {!done ? <div className="space-y-4">
         <div className="rounded-md border border-success/25 bg-success/5 p-3 text-left text-[11px]"><Cap>Receiving wallet</Cap><p className="mt-1 font-mono text-success">{walletAddress ?? "Connect wallet to continue"}</p></div>
         <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-background/40 p-3 text-[10px]">
@@ -401,8 +402,8 @@ export function TaskDialog({ flow, walletAddress, onWalletRequired, onClose, onC
       </div> : <div className="space-y-4 text-center">
         <span className="mx-auto grid size-14 place-items-center rounded-full bg-success/15 text-success"><Check className="size-6" /></span>
         <p className="text-lg font-semibold">Task accepted</p>
-        <p className="font-mono text-3xl text-success">+{money(flow.reward)} session credit</p>
-        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-left text-[11px] text-muted-foreground">This interface records task completion and earnings in local session state only. It is not a live task-review or USDC payout service.</div>
+        <p className="font-mono text-3xl text-success">+{taskReward} session credit</p>
+        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-left text-[11px] text-muted-foreground">This interface records task completion and DVT credits in local session state only. It is not a live task-review or token payout service.</div>
         {receiptError && <p role="alert" className="text-xs text-destructive">Could not record this task completion. Please try again.</p>}
         <Button className="w-full" disabled={collecting} onClick={async () => {
           if (!walletAddress) return onWalletRequired();
@@ -415,7 +416,7 @@ export function TaskDialog({ flow, walletAddress, onWalletRequired, onClose, onC
           } finally {
             setCollecting(false);
           }
-        }}><Zap />{collecting ? "Recording task…" : "Record session credit"}</Button>
+        }}><Zap />{collecting ? "Recording task…" : "Add to Session Credits"}</Button>
       </div>}
     </Shell>
   );
@@ -442,7 +443,7 @@ export function VaultDetailDialog({ vault, unallocatedCash, onClose, onDeposit, 
 }
 
 /* ---------------- CSV ---------------- */
-export function exportLedgerCsv(rows: Array<{ title: string; value: string; meta: string; timestamp?: number; status?: string; reference?: string; vaultId?: string; settlementTier?: string; feeBreakdown?: { network: number | null; depvest: number } }>) {
+export function exportLedgerCsv(rows: Array<{ title: string; value: string; meta: string; asset?: "USDC" | "DVT"; timestamp?: number; status?: string; reference?: string; vaultId?: string; settlementTier?: string; feeBreakdown?: { network: number | null; depvest: number } }>) {
   const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
   const csv = ["Timestamp,Description,Amount,Status,Vault,Settlement,Reference,Network fee,DepVest fee,Details", ...rows.map((r) => [
     r.timestamp == null ? "" : new Date(r.timestamp).toISOString(),
@@ -452,8 +453,8 @@ export function exportLedgerCsv(rows: Array<{ title: string; value: string; meta
     r.vaultId ?? "",
     r.settlementTier ?? "",
     r.reference ?? "",
-    r.feeBreakdown?.network == null ? "Shown by wallet" : money(r.feeBreakdown.network),
-    money(r.feeBreakdown?.depvest ?? 0),
+    r.feeBreakdown?.network == null ? "Shown by wallet" : r.asset === "DVT" ? `${r.feeBreakdown.network.toFixed(2)} DVT` : money(r.feeBreakdown.network),
+    r.asset === "DVT" ? `${(r.feeBreakdown?.depvest ?? 0).toFixed(2)} DVT` : money(r.feeBreakdown?.depvest ?? 0),
     r.meta,
   ].map(esc).join(","))].join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));

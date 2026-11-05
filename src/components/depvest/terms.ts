@@ -25,7 +25,7 @@ export type Terms = {
 export const UNCONFIGURED = "Unconfigured";
 export const pct = (n: number | null) => (n == null ? UNCONFIGURED : `${n.toFixed(2)}%`);
 export const rewardRange = (r: Terms["taskReward"]) =>
-  r ? `$${r.min.toFixed(2)} – $${r.max.toFixed(2)}` : UNCONFIGURED;
+  r ? `+${r.min} DVT – +${r.max} DVT` : UNCONFIGURED;
 
 export const DEFAULT_SUPPORT: Terms["support"] = {
   primaryEmail: "support@depvest.com",
@@ -54,7 +54,7 @@ export const EMPTY_TERMS: Terms = {
 // Initial dashboard configuration. Verify values against governing product terms before launch.
 export const DEFAULT_TERMS: Terms = {
   apy: { Cash: 4.65, Cloud: 11.4, Digital: 6.2 },
-  taskReward: { min: 0.1, max: 0.3 },
+  taskReward: { min: 15, max: 45 },
   fees: {
     deposit: "Free",
     withdrawal: "Free standard · 1.5% instant",
@@ -126,7 +126,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Active Earn",
       q: "How does Active Earn work?",
-      a: "The prototype demonstrates eight task types such as product labelling, summary review, and content screening. Accepted tasks add a configured $0.10-$0.30 credit to local session state; no external task-review or payout service is connected.",
+      a: "The prototype demonstrates eight task types such as product labelling, summary review, and content screening. Accepted tasks add a configured 15-45 DVT credit to local session state; no external task-review or payout service is connected.",
     },
     {
       category: "Active Earn",
@@ -136,7 +136,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Active Earn",
       q: "When are Active Earn rewards paid?",
-      a: "An accepted task updates the demo Available Cash balance and session ledger. No external verification or payout occurs, and the session credit does not persist after the dashboard session ends.",
+      a: "An accepted task adds DVT session credits in local state. Claiming credits records a DVT entry in the local ledger; no external verification, token transfer, or persistent payout occurs.",
     },
     {
       category: "Custody & support",
@@ -156,17 +156,17 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Referrals",
       q: "Are referral rewards paid out?",
-      a: "The referral interface demonstrates codes, balances, and claims in local session state. No real referral registration or external payout service is connected, and displayed reward tiers are estimates.",
+      a: "The referral interface demonstrates codes, USDC balances, and DVT commission tiers in local session state. No real referral registration or external payout service is connected; the displayed DVT rates are illustrative and are not established reward terms.",
     },
     {
       category: "Referrals",
       q: "How does the referral program work?",
-      a: "The prototype can generate a session referral code and demonstrate invite and claim flows, but it does not register or verify real referrals. Displayed tiers are estimates, not established reward terms, and no external payout is connected.",
+      a: "The prototype can generate a session referral code and demonstrate invite and claim flows, but it does not register or verify real referrals. The interface displays illustrative 5%, 10%, and 15% DVT tiers; reward bases and governing terms are not configured, and no external payout is connected.",
     },
     {
       category: "Referrals",
       q: "How do I claim referral rewards?",
-      a: "Claim to Cash demonstrates how a claim could appear in the interface. It changes local session state and receives a demo ledger reference; it does not initiate an external referral payout.",
+      a: "Claim buttons demonstrate how USDC or DVT rewards could appear in the interface. They change local session state and create demo ledger references only; no external referral payout is initiated.",
     },
     {
       category: "Strategies & yield",

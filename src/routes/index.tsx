@@ -19,6 +19,7 @@ import {
   HelpCircle,
   Landmark,
   Layers3,
+  LogIn,
   LockKeyhole,
   Menu,
   Plus,
@@ -35,6 +36,10 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { AuthModal } from "@/components/depvest/auth-modal";
+import { DvtCard } from "@/components/depvest/dvt-card";
+import { DvtModal } from "@/components/depvest/dvt-modal";
+import type { DvtBalance, UserProfile } from "@/components/depvest/types";
 import {
   ConnectWalletDialog,
   InviteFriends,
@@ -81,7 +86,7 @@ export const Route = createFileRoute("/")({
 type View = "Portfolio" | "Invest" | "Active Earn" | "Wallet & Ledger" | "Invite Friends" | "How It Works" | "Q&A" | "About" | "Rules" | "Support";
 type Accent = "cash" | "cloud" | "digital" | "task";
 type ActivityStatus = "pending" | "completed" | "failed";
-type TransactionType = "wallet-snapshot" | "deposit" | "withdrawal" | "rebalance" | "task-payout" | "referral-claim";
+type TransactionType = "wallet-snapshot" | "deposit" | "withdrawal" | "rebalance" | "task-payout" | "referral-claim" | "dvt-claim";
 type FeeBreakdown = { network: number | null; depvest: number };
 type BalanceDeltas = { wallet: number; unallocated: number; treasury: number; cloud: number; digital: number };
 type ActivityRow = Readonly<{
@@ -97,6 +102,7 @@ type ActivityRow = Readonly<{
   vaultId: string;
   settlementTier: string;
   transactionType: TransactionType;
+  asset: "USDC" | "DVT";
   feeBreakdown: FeeBreakdown;
   balanceDeltas: BalanceDeltas;
   transactionHash: string;
@@ -194,7 +200,7 @@ const vaults: Array<{
   },
   {
     name: "AI Task Work",
-    rate: "$0.10 – $0.30",
+    rate: "+15 – +45 DVT",
     rateLabel: "/ task",
     risk: "No capital required",
     detail: "Direct micro-payouts for dataset validation",
@@ -260,7 +266,23 @@ function DepVestApp() {
   const [noticeReceipt, setNoticeReceipt] = useState<Receipt>(null);
   const noticeTimerRef = useRef<number | null>(null);
   const [flow, setFlow] = useState<Flow>(null);
-  const [earned, setEarned] = useState(0);
+  const [dvtBalance, setDvtBalance] = useState<DvtBalance>({
+    total: 0,
+    available: 0,
+    locked: 0,
+    pending: 0,
+    lifetimeEarned: 0,
+    lifetimePurchased: 0,
+  });
+  const [pendingReferralDvt, setPendingReferralDvt] = useState(0);
+  const [profile] = useState<UserProfile>({
+    id: "local-guest",
+    email: null,
+    displayName: null,
+    avatarUrl: null,
+    isAuthenticated: false,
+    linkedWallets: [],
+  });
   const [referralEarnings, setReferralEarnings] = useState(0);
   const [pendingReferralEarnings, setPendingReferralEarnings] = useState(0);
   const [activeReferrals, setActiveReferrals] = useState(0);
@@ -270,6 +292,8 @@ function DepVestApp() {
   const [startedTaskTitles, setStartedTaskTitles] = useState<string[]>([]);
   const taskAttemptsRef = useRef<Set<string>>(new Set());
   const referralClaimInFlightRef = useRef(false);
+  const dvtClaimInFlightRef = useRef(false);
+  const referralDvtClaimInFlightRef = useRef(false);
   const [terms, setTerms] = useState<Terms>(DEFAULT_TERMS);
   const [ledger, setLedger] = useState<ActivityRow[]>([]);
   const [settlementEvents, setSettlementEvents] = useState<Array<{ reference: string; status: "completed" | "failed"; timestamp: number }>>([]);
@@ -281,6 +305,8 @@ function DepVestApp() {
   const [pendingFlow, setPendingFlow] = useState<Flow>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [dvtModalOpen, setDvtModalOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [receipt, setReceipt] = useState<Receipt>(null);
   const [faqQuery, setFaqQuery] = useState("");
@@ -316,6 +342,7 @@ function DepVestApp() {
     settlementTier?: string;
     reference?: string;
     transactionType: TransactionType;
+    asset?: "USDC" | "DVT";
     feeBreakdown?: FeeBreakdown;
     balanceDeltas?: BalanceDeltas;
     transactionHash?: string;
@@ -344,6 +371,7 @@ function DepVestApp() {
       vaultId: options.vaultId ?? "DepVest portfolio",
       settlementTier: options.settlementTier ?? "Internal",
       transactionType: options.transactionType,
+      asset: options.asset ?? "USDC",
       feeBreakdown,
       balanceDeltas: options.balanceDeltas ?? { wallet: 0, unallocated: 0, treasury: 0, cloud: 0, digital: 0 },
       transactionHash: options.transactionHash ?? makeTransactionHash(),
@@ -496,9 +524,8 @@ function DepVestApp() {
     const reward = 2.5;
     setPendingReferralEarnings((current) => current + reward);
     setReferralEarnings((current) => current + reward);
-    setEarned((current) => current + reward);
     setActiveReferrals((current) => current + 1);
-    showNotice("Activated referral qualified; $2.50 reward added to your claimable balance");
+    showNotice("Activated referral qualified; $2.50 USDC added to your claimable balance");
   };
   const claimReferralRewards = () => {
     if (pendingReferralEarnings <= 0 || referralClaimInFlightRef.current) return;
@@ -516,11 +543,56 @@ function DepVestApp() {
     showNotice(`${fmt(amount)} in referral rewards is clearing`);
     settleEntry(entry.reference, () => { referralClaimInFlightRef.current = false; }, `${fmt(amount)} in referral rewards settled to Available cash`);
   };
+  const claimPendingDvt = () => {
+    if (dvtBalance.pending <= 0 || dvtClaimInFlightRef.current) return;
+    dvtClaimInFlightRef.current = true;
+    const amount = dvtBalance.pending;
+    addEntry("DVT session credits claimed", `+${amount.toLocaleString("en-US")} DVT`, `Ledger inscription • ${stamp()}`, "task", Coins, {
+      transactionType: "dvt-claim",
+      asset: "DVT",
+      settlementTier: "Internal ledger",
+      vaultId: "DVT available balance",
+      grossAmount: amount,
+      netAmount: amount,
+    });
+    setDvtBalance((current) => ({
+      ...current,
+      available: current.available + amount,
+      pending: Math.max(0, current.pending - amount),
+    }));
+    setPendingReferralDvt((current) => Math.max(0, current - amount));
+    dvtClaimInFlightRef.current = false;
+    showNotice(`${amount.toLocaleString("en-US")} DVT claimed to your DepVest wallet`);
+  };
+  const claimReferralDvt = () => {
+    if (pendingReferralDvt <= 0 || referralDvtClaimInFlightRef.current) return;
+    referralDvtClaimInFlightRef.current = true;
+    const amount = pendingReferralDvt;
+    addEntry("Referral DVT rewards claimed", `+${amount.toLocaleString("en-US")} DVT`, `Referral reward claim • ${stamp()}`, "task", Gift, {
+      transactionType: "dvt-claim",
+      asset: "DVT",
+      settlementTier: "Internal ledger",
+      vaultId: "DVT available balance",
+      grossAmount: amount,
+      netAmount: amount,
+    });
+    setDvtBalance((current) => ({
+      ...current,
+      available: current.available + amount,
+      pending: Math.max(0, current.pending - amount),
+    }));
+    setPendingReferralDvt(0);
+    referralDvtClaimInFlightRef.current = false;
+    showNotice(`${amount.toLocaleString("en-US")} referral DVT claimed`);
+  };
+  const handleSignIn = () => showNotice("Account sign-in is not connected in this local prototype.");
+  const handleGoogleSignIn = () => showNotice("Google sign-in is not connected in this local prototype.");
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
       <Header
         onMore={() => setMoreOpen(true)}
+        onAuth={() => setAuthOpen(true)}
         view={view}
         onView={go}
         wallet={wallet}
@@ -536,12 +608,13 @@ function DepVestApp() {
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
         {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} unallocatedCash={unallocatedCash} showIdleBanner={!idleBannerDismissed} onDismissIdleBanner={() => setIdleBannerDismissed(true)} rows={allRows()} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
-        {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={earned} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
-        {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} settledUnallocatedCash={unallocatedCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
+        {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={dvtBalance.lifetimeEarned} sessionCredits={dvtBalance.pending} onClaimDvt={claimPendingDvt} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
+        {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} settledUnallocatedCash={unallocatedCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={dvtBalance.lifetimeEarned} dvtBalance={dvtBalance} onClaimDvt={claimPendingDvt} onOpenRoadmap={() => setDvtModalOpen(true)} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
         {view === "Invite Friends" && <InviteFriends
           referralCode={referralCode}
           referralEarnings={referralEarnings}
           pendingReferralEarnings={pendingReferralEarnings}
+          pendingDvtRewards={pendingReferralDvt}
           activeReferrals={activeReferrals}
           appliedReferralCode={appliedReferralCode}
           onNotice={showNotice}
@@ -549,6 +622,7 @@ function DepVestApp() {
           onApplyReferralCode={setAppliedReferralCode}
           onAddPreviewActivatedReferral={() => addPreviewActivatedReferral(true, true)}
           onClaim={claimReferralRewards}
+          onClaimDvt={claimReferralDvt}
         />}
         {view === "How It Works" && <HowItWorks terms={terms} onStart={() => go("Invest")} />}
         {view === "Q&A" && <FAQ key={faqQuery} terms={terms} initialQuery={faqQuery} onSupport={() => go("Support")} />}
@@ -635,15 +709,14 @@ function DepVestApp() {
       <TaskDialog flow={flow} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onComplete={async (title, reward) => {
         if (!wallet) return requireWallet(flow);
         setFlow(null);
-        const entry = addEntry(`AI task payout · ${title}`, `+${fmt(reward)}`, `${WALLET_ADDRESS} · ${stamp()}`, "task", Zap, {
-          status: "pending", transactionType: "task-payout", vaultId: "AI Task Work", settlementTier: "Clearing",
-          grossAmount: reward, netAmount: reward,
-          balanceDeltas: { wallet: 0, unallocated: reward, treasury: 0, cloud: 0, digital: 0 },
-        });
-        setEarned((current) => current + reward);
+        setDvtBalance((current) => ({
+          ...current,
+          total: current.total + reward,
+          pending: current.pending + reward,
+          lifetimeEarned: current.lifetimeEarned + reward,
+        }));
         setTasksDone((current) => current + 1);
-        showNotice(`Task payout of ${fmt(reward)} credited; settlement pending`);
-        settleEntry(entry.reference, () => {}, `Task payout of ${fmt(reward)} confirmed`);
+        showNotice(`+${reward.toLocaleString("en-US")} DVT added to pending session credits`);
       }} />
       <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc, portfolioTotal, { Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings })).find((v) => v.name === flow.name) ?? null) : null} unallocatedCash={availableCash} onClose={() => setFlow(null)} onAllocate={(name) => setAction(`Allocate Cash: ${name}`)} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
       <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => {
@@ -671,7 +744,18 @@ function DepVestApp() {
         onInvite={() => go("Invite Friends")}
         onCopyReferral={() => referralCode && copyToClipboard(referralCode, "Referral code")}
         onNotice={showNotice}
+        onAuth={() => { setProfileOpen(false); setAuthOpen(true); }}
+        isAuthenticated={profile.isAuthenticated}
       />
+      <AuthModal
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        profile={profile}
+        onSignIn={handleSignIn}
+        onGoogleSignIn={handleGoogleSignIn}
+        onLinkWallet={() => { setAuthOpen(false); setConnectOpen(true); }}
+      />
+      <DvtModal open={dvtModalOpen} onOpenChange={setDvtModalOpen} />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} onNotice={showNotice} />
       {settlement && <SettlementProgressDialog
         settlement={settlement}
@@ -683,7 +767,7 @@ function DepVestApp() {
   );
 }
 
-function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, isDark, onToggleTheme }: {
+function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, onAuth, isDark, onToggleTheme }: {
   walletBalance: number;
   onMore: () => void;
   isDark: boolean;
@@ -695,6 +779,7 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
   onDisconnect: () => void;
   onProfile: () => void;
   onNotice: (m: string) => void;
+  onAuth: () => void;
 }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
@@ -718,6 +803,9 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
               <WalletCards /><span className="hidden sm:inline">Connect Wallet</span><span className="sm:hidden">Connect</span>
             </Button>
           )}
+          <Button variant="outline" aria-label="Access your account" title="Access your account" onClick={onAuth} className="hidden size-9 shrink-0 rounded-full p-0 sm:flex sm:h-9 sm:w-auto sm:px-3">
+            <LogIn /><span className="hidden sm:inline">Sign in</span>
+          </Button>
           <button
             type="button"
             onClick={onToggleTheme}
@@ -1002,6 +1090,8 @@ function Invest({ onAction, terms, unallocatedCash, total, alloc, balances }: { 
 function ActiveEarn({
   onAction,
   earned,
+  sessionCredits,
+  onClaimDvt,
   done,
   attempts,
   terms,
@@ -1010,6 +1100,8 @@ function ActiveEarn({
 }: {
   onAction: (value: string) => void;
   earned: number;
+  sessionCredits: number;
+  onClaimDvt: () => void;
   done: number;
   attempts: number;
   terms: Terms;
@@ -1029,9 +1121,9 @@ function ActiveEarn({
   ];
   const tasks = taskDefinitions.map((task) => {
     const amount = rewardRangeConfig
-      ? Math.round((rewardRangeConfig.min + (rewardRangeConfig.max - rewardRangeConfig.min) * task.tier) * 100) / 100
+      ? Math.round(rewardRangeConfig.min + (rewardRangeConfig.max - rewardRangeConfig.min) * task.tier)
       : null;
-    return { ...task, reward: amount == null ? "Unconfigured" : `$${amount.toFixed(2)}` };
+    return { ...task, reward: amount };
   });
   const remaining = Math.max(0, taskLimit - attempts);
   const visibleTasks = tasks.filter((task) => !attemptedTasks.includes(task.title));
@@ -1075,12 +1167,12 @@ function ActiveEarn({
                   <h2 className="text-sm font-semibold">{title}</h2>
                   <p className="mt-1 text-[10px] text-muted-foreground">{detail} · {time}</p>
                 </div>
-                <strong className="font-mono text-success">{reward}</strong>
+                <strong className="font-mono text-success">{reward == null ? "Unconfigured" : `+${reward} DVT`}</strong>
                 <Button
                   size="sm"
                   className="rounded-full"
-                  disabled={!rewardRangeConfig || atLimit}
-                  onClick={() => onAction(`Task|${title}|${reward.slice(1)}`)}
+                  disabled={reward == null || atLimit}
+                  onClick={() => reward != null && onAction(`Task|${title}|${reward}`)}
                 >
                   Start task <ChevronRight />
                 </Button>
@@ -1089,9 +1181,12 @@ function ActiveEarn({
           )}
         </div>
         <aside className="h-fit rounded-[14px] border border-border bg-card p-6">
-          <Label>This session</Label>
-          <p className="mt-3 font-mono text-4xl">${earned.toFixed(2)}</p>
+          <Label>Session Credits</Label>
+          <p className="mt-3 font-mono text-4xl">{sessionCredits.toLocaleString("en-US")} DVT</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">Session Credits: {sessionCredits.toLocaleString("en-US")} DVT ({taskLimit} attempts limit · ≥70% accuracy)</p>
           <p className="mt-2 text-xs text-muted-foreground">{done} accepted · {attempts} of {taskLimit} attempts used</p>
+          <Button className="mt-4 w-full rounded-full" disabled={sessionCredits <= 0} onClick={onClaimDvt}>Claim {sessionCredits.toLocaleString("en-US")} DVT to Wallet</Button>
+          <p className="mt-3 text-[10px] text-muted-foreground">Lifetime earned: {earned.toLocaleString("en-US")} DVT</p>
           <div className="mt-5">
             <ProgressRow label="Session limit" value={`${completedPercent}%`} />
           </div>
@@ -1108,8 +1203,9 @@ function ActiveEarn({
   );
 }
 
-function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, investedCapital, walletBalance, earned, onAction, onReceipt, wallet, onConnect }: { rows: ActivityRow[]; cash: number; settledUnallocatedCash: number; pendingWithdrawals: number; investedCapital: number; walletBalance: number; earned: number; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
+function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, investedCapital, walletBalance, earned, dvtBalance, onClaimDvt, onOpenRoadmap, onAction, onReceipt, wallet, onConnect }: { rows: ActivityRow[]; cash: number; settledUnallocatedCash: number; pendingWithdrawals: number; investedCapital: number; walletBalance: number; earned: number; dvtBalance: DvtBalance; onClaimDvt: () => void; onOpenRoadmap: () => void; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
   return <section><PageIntro eyebrow="Wallet & Ledger" title="Every movement, accounted for." copy="Review your connected wallet, withdrawable cash, locked vault holdings, and ledger receipts in one place." />
+    <DvtCard balance={dvtBalance} onClaimDvt={onClaimDvt} onOpenRoadmap={onOpenRoadmap} />
     <div className="mb-5 flex flex-col gap-3 rounded-[14px] border border-border bg-card p-5 sm:flex-row sm:items-center">
       <span className="vault-icon accent-cash shrink-0"><WalletCards className="size-5" /></span>
       <div className="min-w-0 flex-1">{wallet ? <><p className="text-sm font-semibold">{wallet} connected</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{WALLET_ADDRESS} · Base network</p></> : <><p className="text-sm font-semibold">No wallet connected</p><p className="mt-1 text-[11px] text-muted-foreground">Connect a wallet to deposit and receive payouts.</p></>}</div>
@@ -1119,7 +1215,7 @@ function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, 
       <WalletStat label="Connected wallet" value={wallet ? usd(walletBalance) : "Not connected"} note="External USDC balance" icon={<WalletCards />} />
       <WalletStat label="Withdrawable cash" value={usd(cash)} note="Settled liquid balance less pending withdrawals" icon={<CircleDollarSign />} />
       <WalletStat label="Invested in vaults · locked" value={usd(investedCapital)} note="Rebalance to liquid cash before withdrawing" icon={<LockKeyhole />} />
-      <WalletStat label="Total earned" value={usd(earned)} note="Accepted Active Earn and referral rewards" icon={<BarChart3 />} />
+      <WalletStat label="Total earned in DVT" value={`${earned.toLocaleString("en-US")} DVT`} note="Accepted Active Earn rewards" icon={<BarChart3 />} />
     </div>
     <div className="mt-4 rounded-md border border-success/25 bg-success/5 p-4 text-xs leading-relaxed">
       <p className="font-medium">Ledger reconciliation</p>
@@ -1132,7 +1228,7 @@ function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, 
 const LEDGER_TYPES = ["All", "Deposits", "Withdrawals", "Tasks", "Referrals", "Rebalances"] as const;
 const LEDGER_RANGES = ["All Time", "Today", "Last 7 Days", "Last 30 Days", "Custom"] as const;
 const LEDGER_STATUSES = ["All Status", "Clearing", "Settled"] as const;
-const typeOf = (t: string) => /deposit/i.test(t) ? "Deposits" : /withdraw/i.test(t) ? "Withdrawals" : /task|payout/i.test(t) ? "Tasks" : /referral/i.test(t) ? "Referrals" : /rebalanc/i.test(t) ? "Rebalances" : "Other";
+const typeOf = (t: string) => /deposit/i.test(t) ? "Deposits" : /withdraw/i.test(t) ? "Withdrawals" : /referral/i.test(t) ? "Referrals" : /dvt|task|payout/i.test(t) ? "Tasks" : /rebalanc/i.test(t) ? "Rebalances" : "Other";
 const localDayStart = (value: string) => {
   const [year, month, day] = value.split("-").map(Number);
   return year && month && day ? new Date(year, month - 1, day).getTime() : null;

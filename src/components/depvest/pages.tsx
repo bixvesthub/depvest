@@ -293,7 +293,7 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Referrals",
       q: "Are referral rewards paid out?",
-      a: "The referral interface demonstrates codes, balances, and claims in local session state. No real referral registration or external payout service is connected, and displayed reward tiers are estimates.",
+      a: "The referral interface demonstrates codes, USDC balances, and DVT commission tiers in local session state. No real referral registration or external payout service is connected; the displayed DVT rates are illustrative and are not established reward terms.",
     },
     {
       category: "Custody & support",
@@ -524,17 +524,17 @@ export function Rules({ terms }: { terms: Terms }) {
     {
       t: "Active Earn",
       items: [
-        "The interface shows configured task credit examples ranging from 0.10 to 0.30 by task type.",
+        "The interface shows configured task credit examples ranging from 15 to 45 DVT by task type.",
         "A task is accepted in the demo only at 70% accuracy or higher.",
         "Up to five task attempts per session, one attempt per task type; limits reset each session and duplicate task attempts are blocked.",
-        "Accepted tasks add a demo credit to local session state. No external task review, anti-bot enforcement, or payout service is connected.",
+        "Accepted tasks add pending DVT session credits in local state. Claiming credits creates a DVT ledger entry; no external task review, anti-bot enforcement, or token transfer is connected.",
       ],
     },
     {
       t: "Referral program",
       items: [
         "The interface can generate a session referral code and demonstrate referral claim flows; it does not register or verify real referrals.",
-        "Displayed referral tiers are estimates only, not established reward terms.",
+        "The interface displays illustrative Tier 1 (5%), Tier 2 (10%), and Tier 3 (15%) DVT commissions; reward bases and governing terms are not configured.",
         "Claims update local session state only; no external referral payout service is connected.",
       ],
     },
