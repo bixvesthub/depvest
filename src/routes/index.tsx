@@ -19,7 +19,6 @@ import {
   HelpCircle,
   Landmark,
   Layers3,
-  LogIn,
   LockKeyhole,
   Menu,
   Plus,
@@ -275,7 +274,7 @@ function DepVestApp() {
     lifetimePurchased: 0,
   });
   const [pendingReferralDvt, setPendingReferralDvt] = useState(0);
-  const [profile] = useState<UserProfile>({
+  const [profile, setProfile] = useState<UserProfile>({
     id: "local-guest",
     email: null,
     displayName: null,
@@ -585,14 +584,75 @@ function DepVestApp() {
     referralDvtClaimInFlightRef.current = false;
     showNotice(`${amount.toLocaleString("en-US")} referral DVT claimed`);
   };
-  const handleSignIn = () => showNotice("Account sign-in is not connected in this local prototype.");
-  const handleGoogleSignIn = () => showNotice("Google sign-in is not connected in this local prototype.");
+  const openAuth = (isSignUp: boolean) => {
+    setAuthIsSignUp(isSignUp);
+    setAuthOpen(true);
+  };
+  const [authIsSignUp, setAuthIsSignUp] = useState(false);
+  const handleSignIn = (email: string, _password: string, isSignUp: boolean) => {
+    setProfile({
+      id: email.toLowerCase(),
+      email,
+      displayName: email.split("@")[0] ?? null,
+      avatarUrl: null,
+      isAuthenticated: true,
+      linkedWallets: [],
+    });
+    setAuthOpen(false);
+    setView("Portfolio");
+    showNotice(isSignUp ? "Demo account created. Welcome to DepVest." : "Signed in to your local DepVest demo.");
+  };
+  const handleGoogleSignIn = () => {
+    setProfile({
+      id: "local-google-demo",
+      email: null,
+      displayName: "Google demo account",
+      avatarUrl: null,
+      isAuthenticated: true,
+      linkedWallets: [],
+    });
+    setAuthOpen(false);
+    setView("Portfolio");
+    showNotice("Google demo account opened. No OAuth service is connected.");
+  };
+  const signOut = () => {
+    setProfile({
+      id: "local-guest",
+      email: null,
+      displayName: null,
+      avatarUrl: null,
+      isAuthenticated: false,
+      linkedWallets: [],
+    });
+    setWallet(null);
+    setLedger([]);
+    setSettlementEvents([]);
+    setSettlement(null);
+    setDvtBalance({ total: 0, available: 0, locked: 0, pending: 0, lifetimeEarned: 0, lifetimePurchased: 0 });
+    setPendingReferralDvt(0);
+    setReferralEarnings(0);
+    setPendingReferralEarnings(0);
+    setActiveReferrals(0);
+    setAppliedReferralCode(null);
+    setTasksDone(0);
+    setTasksStarted(0);
+    setStartedTaskTitles([]);
+    taskAttemptsRef.current.clear();
+    ledgerReferencesRef.current.clear();
+    setView("Portfolio");
+    setProfileOpen(false);
+    showNotice("Signed out of your local demo account.");
+  };
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
+      {!profile.isAuthenticated ? (
+        <LandingPage onSignIn={() => openAuth(false)} onSignUp={() => openAuth(true)} />
+      ) : (
+      <>
       <Header
         onMore={() => setMoreOpen(true)}
-        onAuth={() => setAuthOpen(true)}
+        onAuth={() => openAuth(false)}
         view={view}
         onView={go}
         wallet={wallet}
@@ -728,6 +788,22 @@ function DepVestApp() {
           });
         }
         setWallet(w);
+        const provider = w.startsWith("MetaMask")
+          ? "MetaMask"
+          : w.startsWith("Coinbase")
+            ? "Coinbase"
+            : w.startsWith("Ledger")
+              ? "Ledger"
+              : null;
+        if (provider) {
+          setProfile((current) => ({
+            ...current,
+            linkedWallets: [
+              ...current.linkedWallets.filter((linked) => linked.address !== WALLET_ADDRESS),
+              { address: WALLET_ADDRESS, provider, isPrimary: true, verifiedAt: new Date().toISOString() },
+            ],
+          }));
+        }
         setConnectOpen(false);
         const requestedFlow = pendingFlow;
         setPendingFlow(null);
@@ -744,16 +820,9 @@ function DepVestApp() {
         onInvite={() => go("Invite Friends")}
         onCopyReferral={() => referralCode && copyToClipboard(referralCode, "Referral code")}
         onNotice={showNotice}
-        onAuth={() => { setProfileOpen(false); setAuthOpen(true); }}
-        isAuthenticated={profile.isAuthenticated}
-      />
-      <AuthModal
-        open={authOpen}
-        onOpenChange={setAuthOpen}
+        onAuth={() => { setProfileOpen(false); openAuth(false); }}
         profile={profile}
-        onSignIn={handleSignIn}
-        onGoogleSignIn={handleGoogleSignIn}
-        onLinkWallet={() => { setAuthOpen(false); setConnectOpen(true); }}
+        onSignOut={signOut}
       />
       <DvtModal open={dvtModalOpen} onOpenChange={setDvtModalOpen} />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} onNotice={showNotice} />
@@ -763,6 +832,84 @@ function DepVestApp() {
         onClose={() => { if (settlement.step === 4) setSettlement(null); }}
         onViewReceipt={() => { setReceipt(settlement.entry); setSettlement(null); setNotice(""); setNoticeReceipt(null); }}
       />}
+      </>
+      )}
+      <AuthModal
+        key={authIsSignUp ? "signup" : "signin"}
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        initialIsSignUp={authIsSignUp}
+        profile={profile}
+        onSignIn={handleSignIn}
+        onGoogleSignIn={handleGoogleSignIn}
+        onLinkWallet={() => { setAuthOpen(false); setConnectOpen(true); }}
+      />
+    </div>
+  );
+}
+
+function LandingPage({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: () => void }) {
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3">
+          <img src="/depvestlogo.png" alt="" className="size-9 rounded-md object-contain shadow-glow" />
+          <span className="font-semibold">DepVest</span>
+          <span className="hidden rounded border border-border px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-muted-foreground sm:inline">Multi-Asset Hub</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" className="rounded-full" onClick={onSignIn}>Log in</Button>
+          <Button className="rounded-full bg-success text-primary-foreground hover:bg-success/90" onClick={onSignUp}>Create account</Button>
+        </div>
+      </header>
+
+      <main className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[1440px] items-center gap-12 px-4 pb-14 pt-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-20 lg:pt-0">
+        <section>
+          <span className="inline-flex items-center gap-2 rounded-full border border-success/25 bg-success/5 px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-success">
+            <span className="size-1.5 rounded-full bg-success" />Portfolio workspace
+          </span>
+          <h1 className="mt-6 max-w-2xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+            Your portfolio, <span className="text-success">all in one view.</span>
+          </h1>
+          <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Explore portfolio tools, task rewards, and the DVT utility ecosystem in one clear dashboard. Create an account or log in to continue.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Button size="lg" className="rounded-full bg-success text-primary-foreground hover:bg-success/90" onClick={onSignUp}>
+              Create your account <ArrowUpRight />
+            </Button>
+            <Button size="lg" variant="outline" className="rounded-full" onClick={onSignIn}>Log in</Button>
+          </div>
+          <p className="mt-5 max-w-lg text-[10px] leading-relaxed text-muted-foreground">
+            This frontend is a local prototype. Authentication, wallet linking, balances, rewards, and transactions are not connected to backend or blockchain services.
+          </p>
+        </section>
+
+        <section aria-label="DepVest features" className="relative">
+          <div className="pointer-events-none absolute inset-10 rounded-full bg-success/10 blur-3xl" />
+          <div className="relative space-y-3 rounded-2xl border border-border bg-card/80 p-4 shadow-panel sm:p-6">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div><p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">DepVest overview</p><p className="mt-1 text-sm font-semibold">A connected financial workspace</p></div>
+              <ShieldCheck className="size-5 text-success" />
+            </div>
+            <LandingFeature icon={<BarChart3 />} title="Portfolio" copy="Review your assets and allocation in one place." />
+            <LandingFeature icon={<Zap />} title="Active Earn" copy="Complete sample tasks and track DVT session credits." />
+            <LandingFeature icon={<Coins />} title="DVT ecosystem" copy="See balances, utility concepts, and the release roadmap." />
+            <div className="rounded-md border border-warning/20 bg-warning/5 p-3 text-[10px] leading-relaxed text-muted-foreground">
+              All displayed financial information and rewards are examples in this prototype, not live balances or promises of value.
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function LandingFeature({ icon, title, copy }: { icon: ReactNode; title: string; copy: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/50 p-4">
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-success/20 bg-success/5 text-success">{icon}</span>
+      <div><p className="text-sm font-medium">{title}</p><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{copy}</p></div>
     </div>
   );
 }
@@ -803,8 +950,8 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
               <WalletCards /><span className="hidden sm:inline">Connect Wallet</span><span className="sm:hidden">Connect</span>
             </Button>
           )}
-          <Button variant="outline" aria-label="Access your account" title="Access your account" onClick={onAuth} className="hidden size-9 shrink-0 rounded-full p-0 sm:flex sm:h-9 sm:w-auto sm:px-3">
-            <LogIn /><span className="hidden sm:inline">Sign in</span>
+          <Button variant="outline" aria-label="Manage your account" title="Manage your account" onClick={onAuth} className="hidden size-9 shrink-0 rounded-full p-0 sm:flex sm:h-9 sm:w-auto sm:px-3">
+            <User /><span className="hidden sm:inline">Account</span>
           </Button>
           <button
             type="button"

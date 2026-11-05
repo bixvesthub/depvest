@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Mail, ShieldCheck, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import type { UserProfile } from "./types";
 type AuthModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialIsSignUp?: boolean;
   profile: UserProfile;
   onSignIn: (email: string, password: string, isSignUp: boolean) => void | Promise<void>;
   onGoogleSignIn: () => void | Promise<void>;
@@ -24,17 +25,26 @@ type AuthModalProps = {
 export function AuthModal({
   open,
   onOpenChange,
+  initialIsSignUp = false,
   profile,
   onSignIn,
   onGoogleSignIn,
   onLinkWallet,
 }: AuthModalProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("account");
+
+  useEffect(() => {
+    if (open) {
+      setIsSignUp(initialIsSignUp);
+      setError("");
+      setActiveTab("account");
+    }
+  }, [initialIsSignUp, open]);
 
   const submitEmail = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -90,6 +100,10 @@ export function AuthModal({
             Manage your multi-asset portfolio, earn DVT, and link your hardware wallets.
           </DialogDescription>
         </DialogHeader>
+        <p className="rounded-md border border-warning/25 bg-warning/5 p-3 text-center text-[10px] leading-relaxed text-muted-foreground">
+          Demo access only: no authentication provider is connected and account details are not
+          saved. Do not enter a password you use elsewhere.
+        </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
           <TabsList

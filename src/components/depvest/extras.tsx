@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import type { UserProfile } from "./types";
 
 export const WALLET_ADDRESS = "0x8a24…4e91";
 
@@ -165,7 +166,7 @@ export function NotificationsPopover() {
 
 /* ---------------- Profile ---------------- */
 
-export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConnect, onDisconnect, onInvite, onCopyReferral, onNotice, onAuth, isAuthenticated }: {
+export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConnect, onDisconnect, onInvite, onCopyReferral, onNotice, onAuth, onSignOut, profile }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   wallet: string | null;
@@ -176,7 +177,8 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
   onCopyReferral: () => void;
   onNotice: (m: string) => void;
   onAuth: () => void;
-  isAuthenticated: boolean;
+  onSignOut: () => void;
+  profile: UserProfile;
 }) {
   const [prefs, setPrefs] = useState({ yield: true, rebalance: true, security: true });
   const toggle = (k: keyof typeof prefs) => setPrefs((p) => ({ ...p, [k]: !p[k] }));
@@ -189,9 +191,9 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
           <div className="flex items-center gap-4">
             <span className="grid size-14 shrink-0 place-items-center rounded-full border border-border bg-secondary text-lg font-semibold"><Users className="size-5" /></span>
             <div className="min-w-0">
-              <p className="truncate text-lg font-semibold">Guest investor</p>
-              <p className="truncate text-xs text-muted-foreground">Not signed in</p>
-              <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[10px] text-success"><ShieldCheck className="size-3" />Not verified</span>
+              <p className="truncate text-lg font-semibold">{profile.displayName ?? "Guest investor"}</p>
+              <p className="truncate text-xs text-muted-foreground">{profile.email ?? "Local demo account"}</p>
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[10px] text-success"><ShieldCheck className="size-3" />{profile.isAuthenticated ? "Demo session" : "Not signed in"}</span>
             </div>
           </div>
         </SheetHeader>
@@ -226,11 +228,12 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
           </section>
 
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" onClick={onAuth}><Users />{isAuthenticated ? "Manage account" : "Access account"}</Button>
+            <Button variant="outline" onClick={onAuth}><Users />Manage account</Button>
             <Button variant="outline" onClick={onInvite}><UserPlus />Invite friends</Button>
             <Button variant="outline" onClick={() => onNotice("Tax report CSV prepared")}><ArrowDownToLine />Export CSV</Button>
           </div>
           {wallet && <Button variant="ghost" className="w-full text-destructive" onClick={onDisconnect}><LogOut />Disconnect wallet</Button>}
+          <Button variant="ghost" className="w-full text-muted-foreground" onClick={onSignOut}><LogOut />Sign out</Button>
         </div>
       </SheetContent>
     </Sheet>
