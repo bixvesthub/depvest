@@ -413,8 +413,6 @@ function DepVestApp() {
     Task: 0,
   };
   const allocationTotal = Object.values(alloc).reduce((sum, value) => sum + value, 0);
-  const idleCash = unallocatedCash;
-  const cashIsUnallocated = unallocatedCash > 0;
   const hasPendingTransfer = ledger.some((row) => (row.transactionType === "deposit" || row.transactionType === "withdrawal") && row.status === "pending" && !settledReferences.has(row.reference));
   const requireWallet = (nextFlow: Flow) => {
     if (wallet) {
@@ -527,7 +525,7 @@ function DepVestApp() {
       />
       {settlement?.minimized && <SettlementStatusBar settlement={settlement} onOpen={() => setSettlement((current) => current ? { ...current, minimized: false } : current)} />}
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
-        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} idleCash={idleCash} showIdleBanner={cashIsUnallocated && !idleBannerDismissed} onDismissIdleBanner={() => setIdleBannerDismissed(true)} rows={allRows()} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
+        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} unallocatedCash={unallocatedCash} showIdleBanner={!idleBannerDismissed} onDismissIdleBanner={() => setIdleBannerDismissed(true)} rows={allRows()} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={earned} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
         {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} settledUnallocatedCash={unallocatedCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
@@ -742,12 +740,12 @@ function NavButton({ item, active, onClick }: { item: (typeof navItems)[number];
   return <button onClick={onClick} className={cn("flex h-8 items-center gap-2 rounded-full px-4 text-xs transition-colors", active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}><Icon className="size-3.5" />{item.label}</button>;
 }
 
-function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total, idleCash, showIdleBanner, onDismissIdleBanner, rows, balances }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; alloc: Alloc; total: number; idleCash: number; showIdleBanner: boolean; onDismissIdleBanner: () => void; rows: ActivityRow[]; balances: Record<"Treasury" | "Cloud" | "Digital", number>; terms: Terms }) {
+function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total, unallocatedCash, showIdleBanner, onDismissIdleBanner, rows, balances }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; alloc: Alloc; total: number; unallocatedCash: number; showIdleBanner: boolean; onDismissIdleBanner: () => void; rows: ActivityRow[]; balances: Record<"Treasury" | "Cloud" | "Digital", number>; terms: Terms }) {
   return (
     <>
       <PortfolioSummary onAction={onAction} alloc={alloc} total={total} />
-      {total > 0 && idleCash > 0 && showIdleBanner && <section className="mt-4 flex flex-col gap-4 rounded-[14px] border border-success/35 bg-success/10 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex-1"><p className="text-sm font-semibold">You have {usd(idleCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">A confirmed rebalance moves funds between liquid cash and vault holdings. Returns are variable and not guaranteed.</p></div>
+      {unallocatedCash > 0 && showIdleBanner && <section className="mt-4 flex flex-col gap-4 rounded-[14px] border border-success/35 bg-success/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex-1"><p className="text-sm font-semibold">You have {usd(unallocatedCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">A confirmed rebalance moves funds between liquid cash and vault holdings. Returns are variable and not guaranteed.</p></div>
         <Button className="shrink-0 rounded-full" onClick={() => onAction("Deploy Available Cash")}>Deploy to Vaults <ArrowUpRight /></Button>
         <Button type="button" variant="ghost" size="icon" aria-label="Dismiss idle cash notice" className="shrink-0" onClick={onDismissIdleBanner}><X className="size-4" /></Button>
       </section>}
@@ -762,7 +760,7 @@ function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total,
         <section>
           <SectionLabel title="Asset Vaults" right={`4 vaults · ${usd(total)} total`} />
           <TooltipProvider>
-            <div className="space-y-4">{vaults.map((vault) => <VaultCard key={vault.name} vault={withTerms(vault, terms, alloc, total, balances)} onAction={onAction} onNotice={onNotice} idleCash={idleCash} />)}</div>
+            <div className="space-y-4">{vaults.map((vault) => <VaultCard key={vault.name} vault={withTerms(vault, terms, alloc, total, balances)} onAction={onAction} onNotice={onNotice} unallocatedCash={unallocatedCash} />)}</div>
           </TooltipProvider>
           <div className="mt-4 flex items-center gap-3 rounded-md border border-dashed border-border bg-card/40 p-4 text-xs text-muted-foreground">
             <Sparkles className="size-4 shrink-0" /><span className="min-w-0">Add a new vault? Explore private credit & DePIN coming soon.</span>
@@ -813,7 +811,7 @@ function PortfolioSummary({ onAction, alloc, total }: { onAction: (value: string
   );
 }
 
-function VaultCard({ vault, onAction, onNotice, idleCash }: { vault: (typeof vaults)[number]; onAction: (value: string) => void; onNotice: (value: string) => void; idleCash: number }) {
+function VaultCard({ vault, onAction, onNotice, unallocatedCash }: { vault: (typeof vaults)[number]; onAction: (value: string) => void; onNotice: (value: string) => void; unallocatedCash: number }) {
   const [auto, setAuto] = useState(vault.auto);
   const [startedAt] = useState(() => Date.now());
   const [clock, setClock] = useState(startedAt);
@@ -845,7 +843,7 @@ function VaultCard({ vault, onAction, onNotice, idleCash }: { vault: (typeof vau
       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
         <div><Label>Balance</Label><div className="mt-1 flex items-baseline gap-2"><strong className="font-mono text-[22px]">{vault.balance}</strong><span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[9px] text-muted-foreground">{vault.allocation}</span></div><p className="mt-2 text-[10px] text-muted-foreground">◉ {vault.terms}</p></div>
         <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
-          {idleCash > 0 && vault.accent !== "task" && <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAction(`Allocate Cash: ${vault.name}`)}>Allocate Cash</Button>}
+          {unallocatedCash > 0 && vault.accent !== "task" && <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAction(`Allocate Cash: ${vault.name}`)}>Allocate Cash</Button>}
           <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAction(`Invest in ${vault.name}`)}>Details <ChevronRight /></Button><Button size="sm" className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={() => onAction(`${vault.action}: ${vault.name}`)}><span className="truncate">{vault.action}</span> <ArrowUpRight /></Button></div>
       </div>
       <div className="mt-4 h-0.5 overflow-hidden rounded-full bg-secondary"><span className={cn("block h-full", `bar-${vault.accent}`)} style={{ width: vault.allocation }} /></div>
@@ -876,7 +874,7 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
   const rangeDays = ranges[range];
   const now = Date.now();
   const isProjection = balance === 0;
-  const chartRate = hasAllocation ? blendedRate : 7.4;
+  const chartRate = hasAllocation ? blendedRate : isProjection ? 7.4 : 0;
   const chartPrincipal = isProjection ? 1000 : balance / Math.pow(1 + Math.max(0, blendedRate) / 100, rangeDays / 365);
   const points = Array.from({ length: 33 }, (_, index) => {
     const progress = index / 32;
@@ -931,7 +929,7 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
         </div>
         <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground"><span>{(chartPoints[0] ? formatDate(chartPoints[0].date) : "")}</span><span className="flex items-center gap-2"><i className="text-success">{isProjection ? "– Projection" : "– Estimated"}</i><i>{isProjection ? "$1,000 illustration · not invested" : "– Simulated yield"}</i></span><span>{(chartPoints[32] ? formatDate(chartPoints[32].date) : "")}</span></div>
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <Metric label={hasAllocation ? "Blended net APY" : "Illustrative APY"} value={missingActiveRate ? "Unconfigured" : `${(hasAllocation ? blendedRate : chartRate).toFixed(2)}%`} note={hasAllocation ? `${alloc.Treasury}% treasury · ${alloc.Cloud}% cloud · ${alloc.Digital}% digital` : "Example 40/35/25 vault mix"} success />
+          <Metric label={hasAllocation ? "Blended net APY" : isProjection ? "Illustrative APY" : "Deployed vault APY"} value={missingActiveRate ? "Unconfigured" : `${(hasAllocation ? blendedRate : chartRate).toFixed(2)}%`} note={hasAllocation ? `${alloc.Treasury}% treasury · ${alloc.Cloud}% cloud · ${alloc.Digital}% digital` : isProjection ? "Example 40/35/25 vault mix" : "No capital in yield-bearing vaults"} success />
           <Metric label="Daily run-rate" value={dailyAccrual == null ? "Unconfigured" : `+${formatMoney(dailyAccrual)}`} note="/ day · at current balance" success />
           <Metric label="1Y projected return" value={annualReturn == null ? "Unconfigured" : `+${formatMoney(annualReturn)}`} note="/ yr · compounded estimate" success />
         </div>
