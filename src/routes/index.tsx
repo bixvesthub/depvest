@@ -26,6 +26,8 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Moon,
+  Sun,
   UserPlus,
   WalletCards,
   X,
@@ -252,6 +254,7 @@ const makeTransactionHash = () => {
 const amountFromValue = (value: string) => Number(value.replace(/[^0-9.-]/g, "")) || 0;
 
 function DepVestApp() {
+  const [isDark, setIsDark] = useState(true);
   const [view, setView] = useState<View>("Portfolio");
   const [notice, setNotice] = useState("");
   const [noticeReceipt, setNoticeReceipt] = useState<Receipt>(null);
@@ -282,6 +285,10 @@ function DepVestApp() {
   const [receipt, setReceipt] = useState<Receipt>(null);
   const [faqQuery, setFaqQuery] = useState("");
   const [idleBannerDismissed, setIdleBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
 
   const showNotice = (message: string) => {
     if (noticeTimerRef.current != null) window.clearTimeout(noticeTimerRef.current);
@@ -522,6 +529,8 @@ function DepVestApp() {
         onDisconnect={disconnect}
         onProfile={() => setProfileOpen(true)}
         onNotice={showNotice}
+        isDark={isDark}
+        onToggleTheme={() => setIsDark((current) => !current)}
       />
       {settlement?.minimized && <SettlementStatusBar settlement={settlement} onOpen={() => setSettlement((current) => current ? { ...current, minimized: false } : current)} />}
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
@@ -674,9 +683,11 @@ function DepVestApp() {
   );
 }
 
-function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore }: {
+function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, isDark, onToggleTheme }: {
   walletBalance: number;
   onMore: () => void;
+  isDark: boolean;
+  onToggleTheme: () => void;
   view: View;
   onView: (view: View) => void;
   wallet: string | null;
@@ -707,6 +718,16 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
               <WalletCards /><span className="hidden sm:inline">Connect Wallet</span><span className="sm:hidden">Connect</span>
             </Button>
           )}
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            aria-pressed={isDark}
+            aria-label={`Switch to ${isDark ? "bright" : "dark"} mode`}
+            title={`Switch to ${isDark ? "bright" : "dark"} mode`}
+            className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-foreground transition-colors hover:border-success/50"
+          >
+            {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
           <NotificationsPopover />
           <button onClick={onProfile} aria-label="Open profile" className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-xs font-semibold transition-colors hover:border-success/50"><User className="size-4" /></button>
         </div>
