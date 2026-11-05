@@ -9,16 +9,16 @@ import type { Terms } from "./terms";
 
 export const DEPOSIT_ADDRESS = "0x8a24c9F31b07dE52a1C6f04B7e9D3a1f6b2c4e91";
 
-export type Alloc = Record<"Cash" | "Cloud" | "Digital" | "Task", number>;
+export type Alloc = Record<"Unallocated" | "Treasury" | "Cloud" | "Digital" | "Task", number>;
 export type DepositStrategyName = "Balanced Yield" | "Conservative Haven" | "Aggressive Tech" | "Liquid Cash Only" | "US Treasury Cash" | "AI Cloud Compute" | "Blue-Chip Index";
 export const DEPOSIT_STRATEGIES: Array<{ name: DepositStrategyName; description: string; alloc: Alloc }> = [
-  { name: "Balanced Yield", description: "40% Cash / 35% Cloud / 25% Digital", alloc: { Cash: 40, Cloud: 35, Digital: 25, Task: 0 } },
-  { name: "Conservative Haven", description: "75% Cash / 15% Cloud / 10% Digital", alloc: { Cash: 75, Cloud: 15, Digital: 10, Task: 0 } },
-  { name: "Aggressive Tech", description: "10% Cash / 65% Cloud / 25% Digital", alloc: { Cash: 10, Cloud: 65, Digital: 25, Task: 0 } },
-  { name: "Liquid Cash Only", description: "100% Cash / 0% Vaults", alloc: { Cash: 100, Cloud: 0, Digital: 0, Task: 0 } },
-  { name: "US Treasury Cash", description: "100% US Treasury Cash", alloc: { Cash: 100, Cloud: 0, Digital: 0, Task: 0 } },
-  { name: "AI Cloud Compute", description: "100% AI Cloud Compute", alloc: { Cash: 0, Cloud: 100, Digital: 0, Task: 0 } },
-  { name: "Blue-Chip Index", description: "100% Blue-Chip Index", alloc: { Cash: 0, Cloud: 0, Digital: 100, Task: 0 } },
+  { name: "Balanced Yield", description: "40% Treasury / 35% Cloud / 25% Digital", alloc: { Unallocated: 0, Treasury: 40, Cloud: 35, Digital: 25, Task: 0 } },
+  { name: "Conservative Haven", description: "75% Treasury / 15% Cloud / 10% Digital", alloc: { Unallocated: 0, Treasury: 75, Cloud: 15, Digital: 10, Task: 0 } },
+  { name: "Aggressive Tech", description: "10% Treasury / 65% Cloud / 25% Digital", alloc: { Unallocated: 0, Treasury: 10, Cloud: 65, Digital: 25, Task: 0 } },
+  { name: "Liquid Cash Only", description: "100% unallocated cash / 0% vaults", alloc: { Unallocated: 100, Treasury: 0, Cloud: 0, Digital: 0, Task: 0 } },
+  { name: "US Treasury Cash", description: "100% US Treasury Cash", alloc: { Unallocated: 0, Treasury: 100, Cloud: 0, Digital: 0, Task: 0 } },
+  { name: "AI Cloud Compute", description: "100% AI Cloud Compute", alloc: { Unallocated: 0, Treasury: 0, Cloud: 100, Digital: 0, Task: 0 } },
+  { name: "Blue-Chip Index", description: "100% Blue-Chip Index", alloc: { Unallocated: 0, Treasury: 0, Cloud: 0, Digital: 100, Task: 0 } },
 ];
 
 export type Flow =
@@ -133,24 +133,24 @@ export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance 
 
 /* ---------------- Rebalance ---------------- */
 const PRESETS: Array<{ name: string; icon: string; a: Alloc }> = [
-  { name: "Liquid Cash Only", icon: "💵", a: { Cash: 100, Cloud: 0, Digital: 0, Task: 0 } },
-  { name: "Conservative Haven", icon: "🛡️", a: { Cash: 75, Cloud: 15, Digital: 10, Task: 0 } },
-  { name: "Balanced Yield", icon: "⚖️", a: { Cash: 40, Cloud: 35, Digital: 25, Task: 0 } },
-  { name: "Aggressive Tech", icon: "🚀", a: { Cash: 10, Cloud: 65, Digital: 25, Task: 0 } },
+  { name: "Liquid Cash Only", icon: "💵", a: { Unallocated: 100, Treasury: 0, Cloud: 0, Digital: 0, Task: 0 } },
+  { name: "Conservative Haven", icon: "🛡️", a: { Unallocated: 0, Treasury: 75, Cloud: 15, Digital: 10, Task: 0 } },
+  { name: "Balanced Yield", icon: "⚖️", a: { Unallocated: 0, Treasury: 40, Cloud: 35, Digital: 25, Task: 0 } },
+  { name: "Aggressive Tech", icon: "🚀", a: { Unallocated: 0, Treasury: 10, Cloud: 65, Digital: 25, Task: 0 } },
 ];
 export function RebalanceDialog({ open, alloc, initial, targetVault, total: balance = 0, rebalanceFee, walletAddress, onWalletRequired, onClose, onSave }: { open: boolean; alloc: Alloc; initial?: Alloc | null; targetVault?: string | null; total?: number; rebalanceFee?: string | null; walletAddress: string | null; onWalletRequired: () => void; onClose: () => void; onSave: (a: Alloc) => void }) {
   const [draft, setDraft] = useState(alloc);
   const [review, setReview] = useState(false);
   useEffect(() => { if (open) { setDraft(initial ?? alloc); setReview(false); } }, [open, alloc, initial]);
   const total = Object.values(draft).reduce((a, b) => a + b, 0);
-  const colors: Record<keyof Alloc, string> = { Cash: "bar-cash", Cloud: "bar-cloud", Digital: "bar-digital", Task: "bar-task" };
+  const colors: Record<keyof Alloc, string> = { Unallocated: "bar-cash", Treasury: "bar-cash", Cloud: "bar-cloud", Digital: "bar-digital", Task: "bar-task" };
   const keys = Object.keys(draft) as (keyof Alloc)[];
   const volatile = draft.Cloud + draft.Digital;
   const risky = draft.Cloud > 50 || volatile > 50;
   const Bar = ({ a }: { a: Alloc }) => <div className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-secondary">{keys.map((k) => <span key={k} className={colors[k]} style={{ width: `${a[k]}%` }} />)}</div>;
   const Warning = () => risky ? <div role="alert" className="flex gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] text-warning"><ShieldCheck className="size-4 shrink-0" /><span><b>Concentration risk:</b> {volatile}% is in higher-volatility vaults (AI Cloud Compute + Digital Assets). Consider keeping this under 50%.</span></div> : null;
   if (review) return (
-    <Shell open={open} onClose={onClose} eyebrow="Confirm rebalance" title={targetVault ? `Review cash allocation to ${targetVault}` : "Review your new mix"} desc="Compare your current and proposed allocation before confirming.">
+    <Shell open={open} onClose={onClose} eyebrow="Confirm rebalance" title={targetVault ? "Review active vault allocation" : "Review your new mix"} desc="Compare your current and proposed allocation before confirming.">
       <div className="space-y-5">
         <div><p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Current</p><Bar a={alloc} /></div>
         <div><p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Proposed</p><Bar a={draft} /></div>
@@ -164,10 +164,10 @@ export function RebalanceDialog({ open, alloc, initial, targetVault, total: bala
     </Shell>
   );
   return (
-    <Shell open={open} onClose={onClose} eyebrow="Rebalance portfolio" title={targetVault ? `Allocate cash to ${targetVault}` : "Set your target mix"} desc={targetVault ? "The proposed mix moves the currently liquid cash allocation into this vault. Adjust it or choose a preset before confirming." : "Drag sliders — total must equal 100%."}>
+    <Shell open={open} onClose={onClose} eyebrow="Rebalance portfolio" title={targetVault ? "Deploy cash across active vaults" : "Set your target mix"} desc={targetVault ? `Opened from ${targetVault}. Unallocated cash will be deployed across the Treasury, Cloud, and Digital vault mix.` : "Drag sliders — total must equal 100%."}>
       <div className="space-y-5">
         <Bar a={draft} />
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{PRESETS.map((p) => { const on = keys.every((k) => draft[k] === p.a[k]); return <button key={p.name} onClick={() => setDraft(p.a)} aria-pressed={on} className={cn("rounded-md border p-2 text-left text-[11px]", on ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><b className="block">{p.icon} {p.name}</b><span className="font-mono text-[9px] text-muted-foreground">{p.a.Cash}/{p.a.Cloud}/{p.a.Digital}/{p.a.Task}</span></button>; })}</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{PRESETS.map((p) => { const on = keys.every((k) => draft[k] === p.a[k]); return <button key={p.name} onClick={() => setDraft(p.a)} aria-pressed={on} className={cn("rounded-md border p-2 text-left text-[11px]", on ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><b className="block">{p.icon} {p.name}</b><span className="font-mono text-[9px] text-muted-foreground">{p.a.Unallocated}/{p.a.Treasury}/{p.a.Cloud}/{p.a.Digital}</span></button>; })}</div>
         {keys.map((k) => (
           <div key={k}><div className="mb-2 flex justify-between text-xs"><span className="flex items-center gap-2"><i className={cn("size-2 rounded-full", colors[k])} />{k}</span><b className="font-mono">{draft[k]}%</b></div>
             <Slider aria-label={`${k} allocation`} value={[draft[k]]} max={100} step={1} onValueChange={([v]) => setDraft({ ...draft, [k]: v ?? 0 })} /></div>
@@ -185,9 +185,9 @@ export function RebalanceDialog({ open, alloc, initial, targetVault, total: bala
 /* ---------------- Calculator ---------------- */
 export function CalculatorDialog({ open, onClose, onInvest }: { open: boolean; onClose: () => void; onInvest: (n: number, alloc: Alloc) => void }) {
   const strategies = [
-    { name: "Conservative Haven", netApy: 4.65, allocation: { Cash: 75, Cloud: 15, Digital: 10, Task: 0 } },
-    { name: "Balanced Yield", netApy: 7.82, allocation: { Cash: 40, Cloud: 35, Digital: 25, Task: 0 } },
-    { name: "Aggressive Tech", netApy: 10.05, allocation: { Cash: 10, Cloud: 65, Digital: 25, Task: 0 } },
+    { name: "Conservative Haven", netApy: 4.65, allocation: { Unallocated: 0, Treasury: 75, Cloud: 15, Digital: 10, Task: 0 } },
+    { name: "Balanced Yield", netApy: 7.82, allocation: { Unallocated: 0, Treasury: 40, Cloud: 35, Digital: 25, Task: 0 } },
+    { name: "Aggressive Tech", netApy: 10.05, allocation: { Unallocated: 0, Treasury: 10, Cloud: 65, Digital: 25, Task: 0 } },
   ] satisfies Array<{ name: string; netApy: number; allocation: Alloc }>;
   const [amt, setAmt] = useState(5000);
   const [strategyIndex, setStrategyIndex] = useState(1);
@@ -211,7 +211,7 @@ export function CalculatorDialog({ open, onClose, onInvest }: { open: boolean; o
         </div>
         <div>
           <Cap>Strategy</Cap>
-          <div className="mt-2 grid gap-2">{strategies.map((item, index) => <button key={item.name} aria-pressed={strategyIndex === index} onClick={() => setStrategyIndex(index)} className={cn("flex items-center justify-between rounded-md border p-3 text-left", strategyIndex === index ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><span><b className="block text-xs">{item.name}</b><span className="text-[10px] text-muted-foreground">{item.allocation.Cash}% Cash · {item.allocation.Cloud}% Compute · {item.allocation.Digital}% Digital</span></span><span className="font-mono text-xs text-success">{item.netApy.toFixed(2)}% {index === 0 ? "net APY" : "blended net APY"}</span></button>)}</div>
+          <div className="mt-2 grid gap-2">{strategies.map((item, index) => <button key={item.name} aria-pressed={strategyIndex === index} onClick={() => setStrategyIndex(index)} className={cn("flex items-center justify-between rounded-md border p-3 text-left", strategyIndex === index ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><span><b className="block text-xs">{item.name}</b><span className="text-[10px] text-muted-foreground">{item.allocation.Treasury}% Treasury · {item.allocation.Cloud}% Compute · {item.allocation.Digital}% Digital</span></span><span className="font-mono text-xs text-success">{item.netApy.toFixed(2)}% {index === 0 ? "net APY" : "blended net APY"}</span></button>)}</div>
         </div>
         <div><Cap>Time horizon</Cap><div className="mt-2 flex gap-2">{[{ label: "6 Months", value: 0.5 }, { label: "1 Year", value: 1 }, { label: "3 Years", value: 3 }].map((item) => <button key={item.value} aria-pressed={years === item.value} onClick={() => setYears(item.value)} className={cn("flex-1 rounded-full px-3 py-2 text-[10px]", years === item.value ? "bg-foreground text-background" : "bg-secondary text-muted-foreground")}>{item.label}</button>)}</div></div>
         <div className="space-y-2 rounded-md border border-border bg-secondary/40 p-3 text-xs">

@@ -257,7 +257,7 @@ export type Receipt = {
   feeBreakdown?: { network: number | null; depvest: number };
   grossAmount?: number;
   netAmount?: number;
-  allocation?: { Cash: number; Cloud: number; Digital: number };
+  allocation?: { Unallocated: number; Treasury: number; Cloud: number; Digital: number };
   network?: string;
   simulatedBlockNumber?: number;
   transactionType?: string;
@@ -290,7 +290,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
     const settled = receipt.netAmount ?? gross - fee;
     const timestamp = receipt.finalizedAt ?? receipt.timestamp;
     const allocation = receipt.allocation
-      ? `US Treasury ${receipt.allocation.Cash}% · AI Compute ${receipt.allocation.Cloud}% · Blue-Chip ${receipt.allocation.Digital}%`
+      ? `Unallocated ${receipt.allocation.Unallocated}% · US Treasury ${receipt.allocation.Treasury}% · AI Compute ${receipt.allocation.Cloud}% · Blue-Chip ${receipt.allocation.Digital}%`
       : "Not applicable";
     const content = [
       "DepVest transaction receipt",
@@ -345,7 +345,7 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
               <div className="border-t border-border pt-3"><Row k="Gross amount" v={<span className="font-mono">{receiptMoney(gross)}</span>} /></div>
               <Row k="Fee deduction" v={<span className="text-right font-mono">{receiptMoney(fee)}{fee > 0 && receipt.settlementTier === "Express" && <span className="ml-1 block font-sans text-[9px] text-muted-foreground">1.5% Instant fee</span>}</span>} />
               <Row k="Net settled amount" v={<span className="font-mono font-semibold text-success">{receiptMoney(settled)}</span>} />
-              {receipt.allocation && <Row k="Strategy allocation" v={<span className="text-right text-[10px]">US Treasury {receipt.allocation.Cash}%<br />AI Compute {receipt.allocation.Cloud}%<br />Blue-Chip {receipt.allocation.Digital}%</span>} />}
+              {receipt.allocation && <Row k="Strategy allocation" v={<span className="text-right text-[10px]">Unallocated {receipt.allocation.Unallocated}%<br />US Treasury {receipt.allocation.Treasury}%<br />AI Compute {receipt.allocation.Cloud}%<br />Blue-Chip {receipt.allocation.Digital}%</span>} />}
               <Row k="Network · simulated block" v={<span>{receipt.network ?? "Base"} #{receipt.simulatedBlockNumber ?? "—"}</span>} />
               <Row k="Vault / destination" v={receipt.vaultId ?? "DepVest portfolio"} />
               <Row k="Settlement tier" v={receipt.settlementTier ?? "Standard T+1"} />

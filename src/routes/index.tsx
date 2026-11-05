@@ -81,7 +81,7 @@ type Accent = "cash" | "cloud" | "digital" | "task";
 type ActivityStatus = "pending" | "completed" | "failed";
 type TransactionType = "wallet-snapshot" | "deposit" | "withdrawal" | "rebalance" | "task-payout" | "referral-claim";
 type FeeBreakdown = { network: number | null; depvest: number };
-type BalanceDeltas = { wallet: number; liquid: number; cloud: number; digital: number };
+type BalanceDeltas = { wallet: number; unallocated: number; treasury: number; cloud: number; digital: number };
 type ActivityRow = Readonly<{
   id: string;
   title: string;
@@ -100,7 +100,7 @@ type ActivityRow = Readonly<{
   transactionHash: string;
   grossAmount: number;
   netAmount: number;
-  allocation?: Pick<Alloc, "Cash" | "Cloud" | "Digital">;
+  allocation?: Pick<Alloc, "Unallocated" | "Treasury" | "Cloud" | "Digital">;
   network: string;
   simulatedBlockNumber: number;
   finalizedAt?: number;
@@ -147,13 +147,13 @@ const vaults: Array<{
     detail: "Short-term US T-bills & cash reserves in USDC",
     balance: "$0.00",
     allocation: "35%",
-    terms: "No lock • Instant liquidity",
+    terms: "Vault-held • Rebalance to withdraw",
     action: "Add Funds",
     accent: "cash",
     icon: Landmark,
     auto: true,
     badge: "Treasury-bill strategy",
-    note: "Net yield after 10% DepVest performance fee. Instant liquidity.",
+    note: "Net yield after 10% DepVest performance fee. Rebalance Treasury holdings to unallocated cash before withdrawal.",
     sourceExplanation: "The intended return source is interest on short-term U.S. Treasury bills. Treasury securities carry risks, and holdings are subject to the strategy's custody terms.",
   },
   {
@@ -212,8 +212,35 @@ const vaults: Array<{
 const activity: ActivityRow[] = [];
 const TASK_SESSION_LIMIT = 5;
 const STARTING_WALLET_BALANCE = 250000;
-const CASH_ONLY: Alloc = { Cash: 100, Cloud: 0, Digital: 0, Task: 0 };
+const CASH_ONLY: Alloc = { Unallocated: 100, Treasury: 0, Cloud: 0, Digital: 0, Task: 0 };
 const cents = (amount: number) => Math.round(amount * 100) / 100;
+const wholePercentages = (amounts: number[]) => {
+  const total = amounts.reduce((sum, amount) => sum + amount, 0);
+  if (total <= 0) return amounts.map(() => 0);
+  const exact = amounts.map((amount) => (amount / total) * 100);
+  const rounded = exact.map(Math.floor);
+  const remainder = 100 - rounded.reduce((sum, amount) => sum + amount, 0);
+  const byLargestRemainder = exact
+    .map((amount, index) => ({ index, fraction: amount - Math.floor(amount) }))
+    .sort((left, right) => right.fraction - left.fraction);
+  for (let index = 0; index < remainder; index += 1) {
+    const share = byLargestRemainder[index];
+    if (share) rounded[share.index] = (rounded[share.index] ?? 0) + 1;
+  }
+  return rounded;
+};
+const activeYieldMix = (treasury: number, cloud: number, digital: number): Alloc => {
+  const [treasuryPercent, cloudPercent, digitalPercent] = treasury > 0 && cloud > 0 && digital > 0
+    ? wholePercentages([treasury, cloud, digital])
+    : [40, 35, 25];
+  return {
+    Unallocated: 0,
+    Treasury: treasuryPercent ?? 0,
+    Cloud: cloudPercent ?? 0,
+    Digital: digitalPercent ?? 0,
+    Task: 0,
+  };
+};
 const makeReference = () => {
   const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `ref_${id.replace(/-/g, "")}`;
@@ -254,6 +281,7 @@ function DepVestApp() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [receipt, setReceipt] = useState<Receipt>(null);
   const [faqQuery, setFaqQuery] = useState("");
+  const [idleBannerDismissed, setIdleBannerDismissed] = useState(false);
 
   const showNotice = (message: string) => {
     if (noticeTimerRef.current != null) window.clearTimeout(noticeTimerRef.current);
@@ -286,7 +314,7 @@ function DepVestApp() {
     transactionHash?: string;
     grossAmount?: number;
     netAmount?: number;
-    allocation?: Pick<Alloc, "Cash" | "Cloud" | "Digital">;
+    allocation?: Pick<Alloc, "Unallocated" | "Treasury" | "Cloud" | "Digital">;
     network?: string;
     simulatedBlockNumber?: number;
   }) => {
@@ -310,7 +338,7 @@ function DepVestApp() {
       settlementTier: options.settlementTier ?? "Internal",
       transactionType: options.transactionType,
       feeBreakdown,
-      balanceDeltas: options.balanceDeltas ?? { wallet: 0, liquid: 0, cloud: 0, digital: 0 },
+      balanceDeltas: options.balanceDeltas ?? { wallet: 0, unallocated: 0, treasury: 0, cloud: 0, digital: 0 },
       transactionHash: options.transactionHash ?? makeTransactionHash(),
       grossAmount,
       netAmount: options.netAmount ?? cents(grossAmount - feeBreakdown.depvest),
@@ -359,31 +387,34 @@ function DepVestApp() {
   };
   const settledReferences = new Set(settlementEvents.filter((event) => event.status === "completed").map((event) => event.reference));
   const settledEntries = ledger.filter((row) => row.status === "completed" || settledReferences.has(row.reference));
-  const liquidCash = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.liquid, 0));
+  const unallocatedCash = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.unallocated, 0));
+  const treasuryHoldings = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.treasury, 0));
   const cloudHoldings = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.cloud, 0));
   const digitalHoldings = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.digital, 0));
-  const investedCapital = cents(cloudHoldings + digitalHoldings);
-  const portfolioTotal = cents(liquidCash + investedCapital);
+  const investedCapital = cents(treasuryHoldings + cloudHoldings + digitalHoldings);
+  const portfolioTotal = cents(unallocatedCash + investedCapital);
   const walletBalance = wallet ? cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.wallet, 0)) : 0;
   const pendingWithdrawals = ledger
     .filter((row) => row.transactionType === "withdrawal" && row.status === "pending" && !settledReferences.has(row.reference))
-    .reduce((total, row) => total + Math.max(0, -row.balanceDeltas.liquid), 0);
-  const availableCash = cents(Math.max(0, liquidCash - pendingWithdrawals));
+    .reduce((total, row) => total + Math.max(0, -row.balanceDeltas.unallocated), 0);
+  const availableCash = cents(Math.max(0, unallocatedCash - pendingWithdrawals));
   const rows = ledger.map((row) => {
     const event = settlementEvents.find((item) => item.reference === row.reference && item.status === "completed");
     return event ? { ...row, status: "completed" as const, finalizedAt: event.timestamp } : row;
   });
   const allRows = () => [...rows, ...activity].sort((left, right) => right.timestamp - left.timestamp);
   const referralCode = wallet ? createReferralCode(wallet) : null;
-  const alloc: Alloc = portfolioTotal > 0 ? {
-    Cash: Math.round((liquidCash / portfolioTotal) * 100),
-    Cloud: Math.round((cloudHoldings / portfolioTotal) * 100),
-    Digital: Math.max(0, 100 - Math.round((liquidCash / portfolioTotal) * 100) - Math.round((cloudHoldings / portfolioTotal) * 100)),
+  const [unallocatedPercent, treasuryPercent, cloudPercent, digitalPercent] = wholePercentages([unallocatedCash, treasuryHoldings, cloudHoldings, digitalHoldings]);
+  const alloc: Alloc = {
+    Unallocated: unallocatedPercent ?? 0,
+    Treasury: treasuryPercent ?? 0,
+    Cloud: cloudPercent ?? 0,
+    Digital: digitalPercent ?? 0,
     Task: 0,
-  } : { Cash: 0, Cloud: 0, Digital: 0, Task: 0 };
+  };
   const allocationTotal = Object.values(alloc).reduce((sum, value) => sum + value, 0);
-  const idleCash = availableCash;
-  const cashIsUnallocated = availableCash > 0;
+  const idleCash = unallocatedCash;
+  const cashIsUnallocated = unallocatedCash > 0;
   const hasPendingTransfer = ledger.some((row) => (row.transactionType === "deposit" || row.transactionType === "withdrawal") && row.status === "pending" && !settledReferences.has(row.reference));
   const requireWallet = (nextFlow: Flow) => {
     if (wallet) {
@@ -410,21 +441,14 @@ function DepVestApp() {
     if (a === "Deploy Available Cash") {
       if (availableCash <= 0) return showNotice("There is no available liquid cash to deploy.");
       if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before rebalancing.");
-      const investedMix = alloc.Cloud + alloc.Digital > 0
-        ? { Cloud: Math.round((alloc.Cloud / (alloc.Cloud + alloc.Digital)) * 100), Digital: Math.round((alloc.Digital / (alloc.Cloud + alloc.Digital)) * 100) }
-        : { Cloud: 60, Digital: 40 };
-      const initial: Alloc = { Cash: 0, Cloud: investedMix.Cloud, Digital: 100 - investedMix.Cloud, Task: 0 };
+      const initial = activeYieldMix(treasuryHoldings, cloudHoldings, digitalHoldings);
       return requireWallet({ kind: "rebalance", initial });
     }
     if (a.startsWith("Allocate Cash: ")) {
       const targetVault = a.slice("Allocate Cash: ".length);
       if (availableCash <= 0) return showNotice("There is no available liquid cash to allocate.");
       if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before rebalancing.");
-      const targetKey: keyof Alloc = /compute/i.test(targetVault) ? "Cloud" : /treasury|cash/i.test(targetVault) ? "Cash" : "Digital";
-      const current = allocationTotal === 0 ? CASH_ONLY : alloc;
-      const initial: Alloc = targetKey === "Cash"
-        ? CASH_ONLY
-        : { ...current, Cash: 0, [targetKey]: current[targetKey] + current.Cash };
+      const initial = activeYieldMix(treasuryHoldings, cloudHoldings, digitalHoldings);
       return requireWallet({ kind: "rebalance", initial, targetVault });
     }
     if (a === "Risk Check") return setAdvisorOpen(true);
@@ -482,7 +506,7 @@ function DepVestApp() {
       settlementTier: "Clearing",
       vaultId: "Available liquid cash",
       grossAmount: amount, netAmount: amount,
-      balanceDeltas: { wallet: 0, liquid: amount, cloud: 0, digital: 0 },
+      balanceDeltas: { wallet: 0, unallocated: amount, treasury: 0, cloud: 0, digital: 0 },
     });
     showNotice(`${fmt(amount)} in referral rewards is clearing`);
     settleEntry(entry.reference, () => { referralClaimInFlightRef.current = false; }, `${fmt(amount)} in referral rewards settled to Available cash`);
@@ -503,10 +527,10 @@ function DepVestApp() {
       />
       {settlement?.minimized && <SettlementStatusBar settlement={settlement} onOpen={() => setSettlement((current) => current ? { ...current, minimized: false } : current)} />}
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
-        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} idleCash={idleCash} showIdleBanner={cashIsUnallocated} rows={allRows()} balances={{ Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
-        {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
+        {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} idleCash={idleCash} showIdleBanner={cashIsUnallocated && !idleBannerDismissed} onDismissIdleBanner={() => setIdleBannerDismissed(true)} rows={allRows()} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
+        {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={earned} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
-        {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} settledLiquidCash={liquidCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
+        {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} settledUnallocatedCash={unallocatedCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={earned} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
         {view === "Invite Friends" && <InviteFriends
           referralCode={referralCode}
           referralEarnings={referralEarnings}
@@ -553,14 +577,15 @@ function DepVestApp() {
           if (n <= 0 || n > walletBalance) return showNotice("Deposit amount exceeds the connected wallet balance.");
           setFlow(null);
           const nextTotal = cents(portfolioTotal + n);
-          const targetCash = cents((nextTotal * strategyAlloc.Cash) / 100);
+          const targetUnallocated = cents((nextTotal * strategyAlloc.Unallocated) / 100);
+          const targetTreasury = cents((nextTotal * strategyAlloc.Treasury) / 100);
           const targetCloud = cents((nextTotal * strategyAlloc.Cloud) / 100);
-          const targetDigital = cents(nextTotal - targetCash - targetCloud);
+          const targetDigital = cents(nextTotal - targetUnallocated - targetTreasury - targetCloud);
           const entry = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, {
             status: "pending", transactionType: "deposit", vaultId: strategyName, settlementTier: "Clearing",
             feeBreakdown: { network: null, depvest: 0 },
-            grossAmount: n, netAmount: n, allocation: { Cash: strategyAlloc.Cash, Cloud: strategyAlloc.Cloud, Digital: strategyAlloc.Digital }, network: net,
-            balanceDeltas: { wallet: -n, liquid: cents(targetCash - liquidCash), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
+            grossAmount: n, netAmount: n, allocation: { Unallocated: strategyAlloc.Unallocated, Treasury: strategyAlloc.Treasury, Cloud: strategyAlloc.Cloud, Digital: strategyAlloc.Digital }, network: net,
+            balanceDeltas: { wallet: -n, unallocated: cents(targetUnallocated - unallocatedCash), treasury: cents(targetTreasury - treasuryHoldings), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
           });
           startSettlement(entry, "deposit", n);
         }}
@@ -573,30 +598,31 @@ function DepVestApp() {
             status: "pending", transactionType: "withdrawal", vaultId: "Connected wallet", settlementTier: net.includes("Instant") ? "Express" : "Standard T+1",
             feeBreakdown: { network: null, depvest: fee },
             grossAmount: n, netAmount: cents(n - fee), network: net.startsWith("Ethereum") ? "Ethereum" : "Base",
-            balanceDeltas: { wallet: n - fee, liquid: -n, cloud: 0, digital: 0 },
+            balanceDeltas: { wallet: n - fee, unallocated: -n, treasury: 0, cloud: 0, digital: 0 },
           });
           startSettlement(entry, "withdrawal", n);
         }} />
       <RebalanceDialog open={flow?.kind === "rebalance"} alloc={allocationTotal === 0 ? CASH_ONLY : alloc} initial={flow?.kind === "rebalance" ? flow.initial ?? null : null} targetVault={flow?.kind === "rebalance" ? flow.targetVault ?? null : null} total={portfolioTotal} rebalanceFee={terms.fees.rebalance} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onSave={(a) => {
         if (!wallet) return requireWallet(flow);
         if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before rebalancing.");
-        const weightTotal = a.Cash + a.Cloud + a.Digital;
+        const weightTotal = a.Unallocated + a.Treasury + a.Cloud + a.Digital;
         if (weightTotal <= 0) return;
-        const targetCash = cents((portfolioTotal * a.Cash) / weightTotal);
+        const targetUnallocated = cents((portfolioTotal * a.Unallocated) / weightTotal);
+        const targetTreasury = cents((portfolioTotal * a.Treasury) / weightTotal);
         const targetCloud = cents((portfolioTotal * a.Cloud) / weightTotal);
-        const targetDigital = cents(portfolioTotal - targetCash - targetCloud);
-        const moved = cents((Math.abs(targetCash - liquidCash) + Math.abs(targetCloud - cloudHoldings) + Math.abs(targetDigital - digitalHoldings)) / 2);
+        const targetDigital = cents(portfolioTotal - targetUnallocated - targetTreasury - targetCloud);
+        const moved = cents((Math.abs(targetUnallocated - unallocatedCash) + Math.abs(targetTreasury - treasuryHoldings) + Math.abs(targetCloud - cloudHoldings) + Math.abs(targetDigital - digitalHoldings)) / 2);
         const entry = addEntry("Portfolio rebalanced", `${fmt(moved)} reallocated`, `Target mix updated • ${stamp()}`, "cloud", RefreshCw, {
           status: "pending", transactionType: "rebalance", vaultId: "Cash + strategy vaults", settlementTier: "Internal settlement",
-          grossAmount: moved, netAmount: moved, allocation: { Cash: a.Cash, Cloud: a.Cloud, Digital: a.Digital }, network: "Base",
-          balanceDeltas: { wallet: 0, liquid: cents(targetCash - liquidCash), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
+          grossAmount: moved, netAmount: moved, allocation: { Unallocated: a.Unallocated, Treasury: a.Treasury, Cloud: a.Cloud, Digital: a.Digital }, network: "Base",
+          balanceDeltas: { wallet: 0, unallocated: cents(targetUnallocated - unallocatedCash), treasury: cents(targetTreasury - treasuryHoldings), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
         });
         startSettlement(entry, "rebalance", moved);
         setFlow(null);
       }} />
       <AdvisorDialog open={advisorOpen} onClose={() => setAdvisorOpen(false)} alloc={alloc} total={portfolioTotal} onApply={(a) => { setAdvisorOpen(false); requireWallet({ kind: "rebalance", initial: a }); }} />
       <CalculatorDialog open={flow?.kind === "calculator"} onClose={() => setFlow(null)} onInvest={(amount, target) => {
-        const strategyName: DepositStrategyName = target.Cloud >= 60 ? "Aggressive Tech" : target.Cash >= 60 ? "Conservative Haven" : "Balanced Yield";
+        const strategyName: DepositStrategyName = target.Cloud >= 60 ? "Aggressive Tech" : target.Treasury >= 60 ? "Conservative Haven" : "Balanced Yield";
         requireWallet({ kind: "deposit", initialAmount: amount, initialAlloc: target, initialStrategy: strategyName });
       }} />
       <TaskDialog flow={flow} walletAddress={wallet ? WALLET_ADDRESS : null} onWalletRequired={() => requireWallet(flow)} onClose={() => setFlow(null)} onComplete={async (title, reward) => {
@@ -605,20 +631,20 @@ function DepVestApp() {
         const entry = addEntry(`AI task payout · ${title}`, `+${fmt(reward)}`, `${WALLET_ADDRESS} · ${stamp()}`, "task", Zap, {
           status: "pending", transactionType: "task-payout", vaultId: "AI Task Work", settlementTier: "Clearing",
           grossAmount: reward, netAmount: reward,
-          balanceDeltas: { wallet: 0, liquid: reward, cloud: 0, digital: 0 },
+          balanceDeltas: { wallet: 0, unallocated: reward, treasury: 0, cloud: 0, digital: 0 },
         });
         setEarned((current) => current + reward);
         setTasksDone((current) => current + 1);
         showNotice(`Task payout of ${fmt(reward)} credited; settlement pending`);
         settleEntry(entry.reference, () => {}, `Task payout of ${fmt(reward)} confirmed`);
       }} />
-      <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc, portfolioTotal, { Cash: liquidCash, Cloud: cloudHoldings, Digital: digitalHoldings })).find((v) => v.name === flow.name) ?? null) : null} unallocatedCash={availableCash} onClose={() => setFlow(null)} onAllocate={(name) => setAction(`Allocate Cash: ${name}`)} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
+      <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc, portfolioTotal, { Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings })).find((v) => v.name === flow.name) ?? null) : null} unallocatedCash={availableCash} onClose={() => setFlow(null)} onAllocate={(name) => setAction(`Allocate Cash: ${name}`)} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
       <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={(w) => {
         if (!ledger.some((entry) => entry.transactionType === "wallet-snapshot")) {
           addEntry("External wallet balance snapshot", `+${fmt(STARTING_WALLET_BALANCE)}`, `Connected wallet balance • ${stamp()}`, "cash", WalletCards, {
             transactionType: "wallet-snapshot", settlementTier: "Settled snapshot", vaultId: "Connected external wallet",
             grossAmount: STARTING_WALLET_BALANCE, netAmount: STARTING_WALLET_BALANCE,
-            balanceDeltas: { wallet: STARTING_WALLET_BALANCE, liquid: 0, cloud: 0, digital: 0 },
+            balanceDeltas: { wallet: STARTING_WALLET_BALANCE, unallocated: 0, treasury: 0, cloud: 0, digital: 0 },
           });
         }
         setWallet(w);
@@ -716,13 +742,14 @@ function NavButton({ item, active, onClick }: { item: (typeof navItems)[number];
   return <button onClick={onClick} className={cn("flex h-8 items-center gap-2 rounded-full px-4 text-xs transition-colors", active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}><Icon className="size-3.5" />{item.label}</button>;
 }
 
-function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total, idleCash, showIdleBanner, rows, balances }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; alloc: Alloc; total: number; idleCash: number; showIdleBanner: boolean; rows: ActivityRow[]; balances: Record<"Cash" | "Cloud" | "Digital", number>; terms: Terms }) {
+function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total, idleCash, showIdleBanner, onDismissIdleBanner, rows, balances }: { onAction: (value: string) => void; onNotice: (value: string) => void; onView: (v: View) => void; onReceipt: (r: Receipt) => void; alloc: Alloc; total: number; idleCash: number; showIdleBanner: boolean; onDismissIdleBanner: () => void; rows: ActivityRow[]; balances: Record<"Treasury" | "Cloud" | "Digital", number>; terms: Terms }) {
   return (
     <>
       <PortfolioSummary onAction={onAction} alloc={alloc} total={total} />
       {total > 0 && idleCash > 0 && showIdleBanner && <section className="mt-4 flex flex-col gap-4 rounded-[14px] border border-success/35 bg-success/10 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-sm font-semibold">You have {usd(idleCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">A confirmed rebalance moves funds between liquid cash and vault holdings. Returns are variable and not guaranteed.</p></div>
-        <Button className="shrink-0 rounded-full" onClick={() => onAction("Rebalance")}>Deploy to Vaults <ArrowUpRight /></Button>
+        <div className="flex-1"><p className="text-sm font-semibold">You have {usd(idleCash)} in liquid cash.</p><p className="mt-1 text-xs text-muted-foreground">Put your capital to work across yield-generating vaults.</p><p className="mt-1 text-[10px] text-muted-foreground">A confirmed rebalance moves funds between liquid cash and vault holdings. Returns are variable and not guaranteed.</p></div>
+        <Button className="shrink-0 rounded-full" onClick={() => onAction("Deploy Available Cash")}>Deploy to Vaults <ArrowUpRight /></Button>
+        <Button type="button" variant="ghost" size="icon" aria-label="Dismiss idle cash notice" className="shrink-0" onClick={onDismissIdleBanner}><X className="size-4" /></Button>
       </section>}
       {total === 0 && <section aria-label="Activate your account" className="mt-4 rounded-[14px] border border-border bg-card p-5">
         <p className="text-sm font-semibold">Activate Your Account</p><p className="mt-1 text-xs text-muted-foreground">Choose how you want to start growing your balance.</p>
@@ -765,11 +792,11 @@ function PortfolioSummary({ onAction, alloc, total }: { onAction: (value: string
             <div>
               <div className="mb-3 flex justify-between"><Label>Asset Allocation</Label><span className="font-mono text-[10px] text-muted-foreground">{Object.values(alloc).some(Boolean) ? "Target mix" : "Not allocated yet — use Rebalance"}</span></div>
               <AllocationBar alloc={alloc} />
-              <div className="mt-3 flex flex-wrap gap-2"><Legend accent="cash" label="Cash" value={`${alloc.Cash}%`} /><Legend accent="cloud" label="Cloud" value={`${alloc.Cloud}%`} /><Legend accent="digital" label="Digital" value={`${alloc.Digital}%`} /><Legend accent="task" label="Task" value={`${alloc.Task}%`} /></div>
+              <div className="mt-3 flex flex-wrap gap-2"><Legend accent="cash" label="Unallocated" value={`${alloc.Unallocated}%`} /><Legend accent="cash" label="US Treasury" value={`${alloc.Treasury}%`} /><Legend accent="cloud" label="Cloud" value={`${alloc.Cloud}%`} /><Legend accent="digital" label="Digital" value={`${alloc.Digital}%`} /><Legend accent="task" label="Task" value={`${alloc.Task}%`} /></div>
             </div>
             <div className="flex items-center gap-8">
               <div style={ringStyle(alloc)} className="grid size-[132px] shrink-0 place-items-center rounded-full"><div className="grid size-[92px] place-items-center rounded-full bg-card text-center"><div><Label>Allocation</Label><p className="mt-1 text-lg font-semibold">4 ASSETS</p></div></div></div>
-              <div className="hidden grid-cols-2 gap-x-6 gap-y-3 text-xs xl:grid"><span className="text-muted-foreground">Cash</span><b>{alloc.Cash}%</b><span className="text-muted-foreground">Cloud</span><b>{alloc.Cloud}%</b><span className="text-muted-foreground">Digital</span><b>{alloc.Digital}%</b><span className="text-muted-foreground">Task</span><b>{alloc.Task}%</b></div>
+              <div className="hidden grid-cols-2 gap-x-6 gap-y-3 text-xs xl:grid"><span className="text-muted-foreground">Unallocated</span><b>{alloc.Unallocated}%</b><span className="text-muted-foreground">US Treasury</span><b>{alloc.Treasury}%</b><span className="text-muted-foreground">Cloud</span><b>{alloc.Cloud}%</b><span className="text-muted-foreground">Digital</span><b>{alloc.Digital}%</b></div>
             </div>
           </div>
         </div>
@@ -818,7 +845,7 @@ function VaultCard({ vault, onAction, onNotice, idleCash }: { vault: (typeof vau
       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
         <div><Label>Balance</Label><div className="mt-1 flex items-baseline gap-2"><strong className="font-mono text-[22px]">{vault.balance}</strong><span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[9px] text-muted-foreground">{vault.allocation}</span></div><p className="mt-2 text-[10px] text-muted-foreground">◉ {vault.terms}</p></div>
         <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
-          {idleCash > 0 && (vault.accent === "cloud" || vault.accent === "digital") && <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAction(`Allocate Cash: ${vault.name}`)}>Allocate Cash</Button>}
+          {idleCash > 0 && vault.accent !== "task" && <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAction(`Allocate Cash: ${vault.name}`)}>Allocate Cash</Button>}
           <Button variant="outline" size="sm" className="rounded-full" onClick={() => onAction(`Invest in ${vault.name}`)}>Details <ChevronRight /></Button><Button size="sm" className="rounded-full bg-foreground text-background hover:bg-foreground/90" onClick={() => onAction(`${vault.action}: ${vault.name}`)}><span className="truncate">{vault.action}</span> <ArrowUpRight /></Button></div>
       </div>
       <div className="mt-4 h-0.5 overflow-hidden rounded-full bg-secondary"><span className={cn("block h-full", `bar-${vault.accent}`)} style={{ width: vault.allocation }} /></div>
@@ -831,14 +858,18 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
   const [range, setRange] = useState<"1W" | "1M" | "3M" | "1Y" | "ALL">("1M");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const ranges = { "1W": 7, "1M": 30, "3M": 90, "1Y": 365, ALL: 1825 } as const;
-  const weights = alloc.Cash + alloc.Cloud + alloc.Digital;
+  const weights = alloc.Treasury + alloc.Cloud + alloc.Digital;
   const hasAllocation = weights > 0;
-  const illustrativeWeights = { Cash: 40, Cloud: 35, Digital: 25 };
-  const blendedRate = (["Cash", "Cloud", "Digital"] as const).reduce((sum, key) => {
+  const illustrativeWeights = { Treasury: 40, Cloud: 35, Digital: 25 };
+  const blendedRate = (["Treasury", "Cloud", "Digital"] as const).reduce((sum, key) => {
     const weight = hasAllocation ? alloc[key] : illustrativeWeights[key];
-    return sum + weight * (terms.apy[key] ?? 0);
+    const rateKey = key === "Treasury" ? "Cash" : key;
+    return sum + weight * (terms.apy[rateKey] ?? 0);
   }, 0) / (hasAllocation ? 100 : 100);
-  const missingActiveRate = (["Cash", "Cloud", "Digital"] as const).some((key) => alloc[key] > 0 && terms.apy[key] == null);
+  const missingActiveRate = (["Treasury", "Cloud", "Digital"] as const).some((key) => {
+    const rateKey = key === "Treasury" ? "Cash" : key;
+    return alloc[key] > 0 && terms.apy[rateKey] == null;
+  });
   const effectiveRate = hasAllocation ? blendedRate : 0;
   const dailyAccrual = missingActiveRate ? null : balance * (Math.pow(1 + effectiveRate / 100, 1 / 365) - 1);
   const annualReturn = missingActiveRate ? null : balance * (Math.pow(1 + effectiveRate / 100, 365 / 365) - 1);
@@ -900,7 +931,7 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
         </div>
         <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground"><span>{(chartPoints[0] ? formatDate(chartPoints[0].date) : "")}</span><span className="flex items-center gap-2"><i className="text-success">{isProjection ? "– Projection" : "– Estimated"}</i><i>{isProjection ? "$1,000 illustration · not invested" : "– Simulated yield"}</i></span><span>{(chartPoints[32] ? formatDate(chartPoints[32].date) : "")}</span></div>
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <Metric label={hasAllocation ? "Blended net APY" : "Illustrative APY"} value={missingActiveRate ? "Unconfigured" : `${(hasAllocation ? blendedRate : chartRate).toFixed(2)}%`} note={hasAllocation ? `${alloc.Cash}% cash · ${alloc.Cloud}% cloud · ${alloc.Digital}% digital` : "Example 40/35/25 vault mix"} success />
+          <Metric label={hasAllocation ? "Blended net APY" : "Illustrative APY"} value={missingActiveRate ? "Unconfigured" : `${(hasAllocation ? blendedRate : chartRate).toFixed(2)}%`} note={hasAllocation ? `${alloc.Treasury}% treasury · ${alloc.Cloud}% cloud · ${alloc.Digital}% digital` : "Example 40/35/25 vault mix"} success />
           <Metric label="Daily run-rate" value={dailyAccrual == null ? "Unconfigured" : `+${formatMoney(dailyAccrual)}`} note="/ day · at current balance" success />
           <Metric label="1Y projected return" value={annualReturn == null ? "Unconfigured" : `+${formatMoney(annualReturn)}`} note="/ yr · compounded estimate" success />
         </div>
@@ -922,7 +953,7 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
   );
 }
 
-function Invest({ onAction, terms, unallocatedCash, total, alloc, balances }: { onAction: (value: string) => void; terms: Terms; unallocatedCash: number; total: number; alloc: Alloc; balances: Record<"Cash" | "Cloud" | "Digital", number> }) {
+function Invest({ onAction, terms, unallocatedCash, total, alloc, balances }: { onAction: (value: string) => void; terms: Terms; unallocatedCash: number; total: number; alloc: Alloc; balances: Record<"Treasury" | "Cloud" | "Digital", number> }) {
   const [query, setQuery] = useState("");
   const visible = vaults.map((v) => withTerms(v, terms, alloc, total, balances)).filter((vault) => vault.name.toLowerCase().includes(query.toLowerCase()));
   return (
@@ -1058,7 +1089,7 @@ function ActiveEarn({
   );
 }
 
-function WalletLedger({ rows, cash, settledLiquidCash, pendingWithdrawals, investedCapital, walletBalance, earned, onAction, onReceipt, wallet, onConnect }: { rows: ActivityRow[]; cash: number; settledLiquidCash: number; pendingWithdrawals: number; investedCapital: number; walletBalance: number; earned: number; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
+function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, investedCapital, walletBalance, earned, onAction, onReceipt, wallet, onConnect }: { rows: ActivityRow[]; cash: number; settledUnallocatedCash: number; pendingWithdrawals: number; investedCapital: number; walletBalance: number; earned: number; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
   return <section><PageIntro eyebrow="Wallet & Ledger" title="Every movement, accounted for." copy="Review your connected wallet, withdrawable cash, locked vault holdings, and ledger receipts in one place." />
     <div className="mb-5 flex flex-col gap-3 rounded-[14px] border border-border bg-card p-5 sm:flex-row sm:items-center">
       <span className="vault-icon accent-cash shrink-0"><WalletCards className="size-5" /></span>
@@ -1073,8 +1104,8 @@ function WalletLedger({ rows, cash, settledLiquidCash, pendingWithdrawals, inves
     </div>
     <div className="mt-4 rounded-md border border-success/25 bg-success/5 p-4 text-xs leading-relaxed">
       <p className="font-medium">Ledger reconciliation</p>
-      <p className="mt-1 text-muted-foreground">The ledger tracks the external wallet separately from DepVest liquid cash and locked vault holdings. Clearing withdrawals reserve liquid cash until settlement. This session ledger is local to this dashboard session.</p>
-      <p className="mt-2 font-mono text-[10px] text-muted-foreground">External wallet {usd(wallet ? walletBalance : 0)} · DepVest: withdrawable {usd(cash)} + withdrawal reserve {usd(pendingWithdrawals)} = settled liquid {usd(settledLiquidCash)}; + locked vaults {usd(investedCapital)} = portfolio {usd(settledLiquidCash + investedCapital)}</p>
+      <p className="mt-1 text-muted-foreground">The ledger tracks the external wallet separately from DepVest unallocated cash and locked Treasury, Cloud, and Digital vault holdings. Clearing withdrawals reserve unallocated cash until settlement. This session ledger is local to this dashboard session.</p>
+      <p className="mt-2 font-mono text-[10px] text-muted-foreground">External wallet {usd(wallet ? walletBalance : 0)} · DepVest: withdrawable {usd(cash)} + withdrawal reserve {usd(pendingWithdrawals)} = unallocated {usd(settledUnallocatedCash)}; + locked vaults {usd(investedCapital)} = portfolio {usd(settledUnallocatedCash + investedCapital)}</p>
     </div>
     <div className="mt-6 rounded-[14px] border border-border bg-card"><div className="border-b border-border p-5"><div className="min-w-0"><h2 className="text-sm font-semibold">Transaction ledger</h2><p className="mt-1 text-[10px] text-muted-foreground">Each entry has a unique reference, timestamp, fee breakdown, and clearing status. Tap an entry to view its receipt.</p></div></div><LedgerFilters rows={rows} onReceipt={onReceipt} /></div></section>;
 }
@@ -1133,7 +1164,7 @@ function LedgerFilters({ rows, onReceipt }: { rows: ActivityRow[]; onReceipt: (r
   {list.map((item) => <button key={item.id} onClick={() => onReceipt(item)} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-5 py-4 text-left last:border-0 hover:bg-secondary/30 sm:gap-4"><span className={cn("vault-icon size-8", `accent-${item.accent}`)}><item.icon className="size-4" /></span><div className="min-w-0"><p className="truncate text-xs font-medium">{item.title}</p><p className="mt-1 truncate text-[9px] text-muted-foreground">{new Date(item.timestamp).toLocaleString()} · {item.meta}</p><span className={cn("mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]", item.status === "pending" ? "bg-warning/15 text-warning" : item.status === "failed" ? "bg-destructive/15 text-destructive" : "bg-success/10 text-success")}>{item.status === "pending" ? <i className="size-1.5 animate-pulse rounded-full bg-warning" /> : item.status === "failed" ? "●" : "✓"} {item.status === "pending" ? "Clearing" : item.status === "failed" ? "Failed" : "Settled"}</span></div><span className={cn("font-mono text-xs", item.value.startsWith("-") ? "text-muted-foreground" : "text-success")}>{item.value}</span></button>)}</>;
 }
 
-function AllocationBar({ alloc }: { alloc: Alloc }) { return <div className="flex h-2 gap-1 overflow-hidden rounded-full bg-secondary p-0.5"><span className="bar-cash rounded-full" style={{ width: `${alloc.Cash}%` }}/><span className="bar-cloud rounded-full" style={{ width: `${alloc.Cloud}%` }}/><span className="bar-digital rounded-full" style={{ width: `${alloc.Digital}%` }}/><span className="bar-task rounded-full" style={{ width: `${alloc.Task}%` }}/></div>; }
+function AllocationBar({ alloc }: { alloc: Alloc }) { return <div className="flex h-2 gap-1 overflow-hidden rounded-full bg-secondary p-0.5"><span className="bar-cash rounded-full" style={{ width: `${alloc.Unallocated}%` }}/><span className="bar-cash rounded-full" style={{ width: `${alloc.Treasury}%` }}/><span className="bar-cloud rounded-full" style={{ width: `${alloc.Cloud}%` }}/><span className="bar-digital rounded-full" style={{ width: `${alloc.Digital}%` }}/><span className="bar-task rounded-full" style={{ width: `${alloc.Task}%` }}/></div>; }
 function Label({ children }: { children: ReactNode }) { return <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{children}</span>; }
 function Badge({ children, accent }: { children: ReactNode; accent: Accent }) { return <span className={cn("rounded-full border px-2 py-1 text-[9px]", `badge-${accent}`)}>{children}</span>; }
 function Legend({ accent, label, value }: { accent: Accent; label: string; value: string }) { return <span className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-[10px]"><i className={cn("size-2 rounded-full", `bar-${accent}`)} />{label}<b className="font-mono text-muted-foreground">{value}</b></span>; }
@@ -1144,9 +1175,10 @@ function ProgressRow({ label, value }: { label: string; value: string }) { retur
 function WalletStat({ label, value, icon, note }: { label: string; value: string; icon: ReactNode; note?: string }) { return <div className="rounded-[14px] border border-border bg-card p-6"><span className="vault-icon accent-cash">{icon}</span><p className="mt-6 text-xs text-muted-foreground">{label}</p><p className="mt-2 font-mono text-2xl">{value}</p>{note && <p className="mt-1 text-[10px] text-muted-foreground">{note}</p>}</div>; }
 const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function withTerms<T extends (typeof vaults)[number]>(v: T, terms: Terms, alloc?: Alloc, total = 0, balances?: Record<"Cash" | "Cloud" | "Digital", number>): T {
-  const key = v.accent === "cash" ? "Cash" : v.accent === "cloud" ? "Cloud" : v.accent === "digital" ? "Digital" : null;
-  const rate = key ? pct(terms.apy[key]) : rewardRange(terms.taskReward);
+function withTerms<T extends (typeof vaults)[number]>(v: T, terms: Terms, alloc?: Alloc, total = 0, balances?: Record<"Treasury" | "Cloud" | "Digital", number>): T {
+  const key = v.accent === "cash" ? "Treasury" : v.accent === "cloud" ? "Cloud" : v.accent === "digital" ? "Digital" : null;
+  const rateKey = key === "Treasury" ? "Cash" : key;
+  const rate = rateKey ? pct(terms.apy[rateKey]) : rewardRange(terms.taskReward);
   const a = alloc ? alloc[key ?? "Task"] : 0;
   const amount = key ? balances?.[key] ?? (total * a) / 100 : 0;
   const balance = key ? usd(amount) : "$0.00";
@@ -1154,7 +1186,7 @@ function withTerms<T extends (typeof vaults)[number]>(v: T, terms: Terms, alloc?
   return { ...v, rate, allocation, balance };
 }
 function ringStyle(a: Alloc) {
-  const c = a.Cash, d = c + a.Cloud, e = d + a.Digital;
+  const c = a.Unallocated, t = c + a.Treasury, d = t + a.Cloud, e = d + a.Digital;
   if (e + a.Task === 0) return { background: "var(--secondary)" };
-  return { background: `conic-gradient(var(--success) 0 ${c}%, var(--cloud) ${c}% ${d}%, var(--digital) ${d}% ${e}%, var(--task) ${e}% 100%)` };
+  return { background: `conic-gradient(var(--success) 0 ${c}%, var(--success) ${c}% ${t}%, var(--cloud) ${t}% ${d}%, var(--digital) ${d}% ${e}%, var(--task) ${e}% 100%)` };
 }
