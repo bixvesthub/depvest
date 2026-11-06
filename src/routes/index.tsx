@@ -38,7 +38,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AuthModal } from "@/components/depvest/auth-modal";
 import { DvtCard } from "@/components/depvest/dvt-card";
 import { DvtModal } from "@/components/depvest/dvt-modal";
-import type { DvtBalance, UserProfile } from "@/components/depvest/types";
+import type { AccountPreferences, DvtBalance, LinkedWallet, UserProfile } from "@/components/depvest/types";
 import {
   ConnectWalletDialog,
   InviteFriends,
@@ -277,11 +277,18 @@ function DepVestApp() {
   const [profile, setProfile] = useState<UserProfile>({
     id: "local-guest",
     email: null,
+    emailVerified: false,
     displayName: null,
     avatarUrl: null,
+    createdAt: null,
     isAuthenticated: false,
     linkedWallets: [],
   });
+  const [preferences, setPreferences] = useState<AccountPreferences>({
+    riskTolerance: "Balanced",
+    emailNotifications: true,
+  });
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [referralEarnings, setReferralEarnings] = useState(0);
   const [pendingReferralEarnings, setPendingReferralEarnings] = useState(0);
   const [activeReferrals, setActiveReferrals] = useState(0);
@@ -314,6 +321,10 @@ function DepVestApp() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
+
+  useEffect(() => {
+    setIsSessionLoading(false);
+  }, []);
 
   const showNotice = (message: string) => {
     if (noticeTimerRef.current != null) window.clearTimeout(noticeTimerRef.current);
@@ -589,12 +600,14 @@ function DepVestApp() {
     setAuthOpen(true);
   };
   const [authIsSignUp, setAuthIsSignUp] = useState(false);
-  const handleSignIn = (email: string, _password: string, isSignUp: boolean) => {
+  const handleSignIn = async (email: string, _password: string, isSignUp: boolean): Promise<void> => {
     setProfile({
       id: email.toLowerCase(),
       email,
+      emailVerified: false,
       displayName: email.split("@")[0] ?? null,
       avatarUrl: null,
+      createdAt: new Date().toISOString(),
       isAuthenticated: true,
       linkedWallets: [],
     });
@@ -602,12 +615,14 @@ function DepVestApp() {
     setView("Portfolio");
     showNotice(isSignUp ? "Account created. Welcome to DepVest." : "Signed in. Welcome back to DepVest.");
   };
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async (): Promise<void> => {
     setProfile({
       id: "google-account",
       email: null,
+      emailVerified: false,
       displayName: "Google account",
       avatarUrl: null,
+      createdAt: new Date().toISOString(),
       isAuthenticated: true,
       linkedWallets: [],
     });
@@ -615,15 +630,18 @@ function DepVestApp() {
     setView("Portfolio");
     showNotice("Signed in with Google.");
   };
-  const signOut = () => {
+  const handleSignOut = async (): Promise<void> => {
     setProfile({
       id: "local-guest",
       email: null,
+      emailVerified: false,
       displayName: null,
       avatarUrl: null,
+      createdAt: null,
       isAuthenticated: false,
       linkedWallets: [],
     });
+    setPreferences({ riskTolerance: "Balanced", emailNotifications: true });
     setWallet(null);
     setLedger([]);
     setSettlementEvents([]);
@@ -644,7 +662,39 @@ function DepVestApp() {
     showNotice("Signed out.");
   };
 
+  const handleLinkWallet = async (address: string, provider: LinkedWallet["provider"]): Promise<void> => {
+    setProfile((current) => ({
+      ...current,
+      linkedWallets: [
+        ...current.linkedWallets.filter((linked) => linked.address !== address),
+        { address, provider, isPrimary: true, verifiedAt: new Date().toISOString() },
+      ],
+    }));
+  };
+
+  const handleUpdateProfile = async (displayName: string, nextPreferences: AccountPreferences): Promise<void> => {
+    setProfile((current) => ({ ...current, displayName: displayName || null }));
+    setPreferences(nextPreferences);
+  };
+
+  const handlePasswordReset = async (_email: string): Promise<void> => {
+    throw new Error("Password recovery is not connected until account services are available.");
+  };
+
   return (
+    isSessionLoading ? (
+      <div className="min-h-screen bg-background p-6" aria-busy="true" aria-label="Restoring session">
+        <div className="mx-auto max-w-[1440px] animate-pulse space-y-6">
+          <div className="h-12 w-full rounded-lg bg-secondary/60" />
+          <div className="h-48 rounded-xl bg-secondary/40" />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="h-28 rounded-xl bg-secondary/40" />
+            <div className="h-28 rounded-xl bg-secondary/40" />
+            <div className="h-28 rounded-xl bg-secondary/40" />
+          </div>
+        </div>
+      </div>
+    ) :
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
       {!profile.isAuthenticated ? (
         <LandingPage onSignIn={() => openAuth(false)} onSignUp={() => openAuth(true)} />
@@ -663,6 +713,7 @@ function DepVestApp() {
         onNotice={showNotice}
         isDark={isDark}
         onToggleTheme={() => setIsDark((current) => !current)}
+        profile={profile}
       />
       {settlement?.minimized && <SettlementStatusBar settlement={settlement} onOpen={() => setSettlement((current) => current ? { ...current, minimized: false } : current)} />}
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
@@ -796,13 +847,9 @@ function DepVestApp() {
               ? "Ledger"
               : null;
         if (provider) {
-          setProfile((current) => ({
-            ...current,
-            linkedWallets: [
-              ...current.linkedWallets.filter((linked) => linked.address !== WALLET_ADDRESS),
-              { address: WALLET_ADDRESS, provider, isPrimary: true, verifiedAt: new Date().toISOString() },
-            ],
-          }));
+          void handleLinkWallet(WALLET_ADDRESS, provider).catch((error: unknown) => {
+            showNotice(error instanceof Error ? error.message : "Unable to link this wallet.");
+          });
         }
         setConnectOpen(false);
         const requestedFlow = pendingFlow;
@@ -822,7 +869,9 @@ function DepVestApp() {
         onNotice={showNotice}
         onAuth={() => { setProfileOpen(false); openAuth(false); }}
         profile={profile}
-        onSignOut={signOut}
+        preferences={preferences}
+        onUpdateProfile={handleUpdateProfile}
+        onSignOut={handleSignOut}
       />
       <DvtModal open={dvtModalOpen} onOpenChange={setDvtModalOpen} />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} onNotice={showNotice} />
@@ -842,6 +891,7 @@ function DepVestApp() {
         profile={profile}
         onSignIn={handleSignIn}
         onGoogleSignIn={handleGoogleSignIn}
+        onPasswordReset={handlePasswordReset}
         onLinkWallet={() => { setAuthOpen(false); setConnectOpen(true); }}
       />
     </div>
@@ -914,7 +964,7 @@ function LandingFeature({ icon, title, copy }: { icon: ReactNode; title: string;
   );
 }
 
-function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, onAuth, isDark, onToggleTheme }: {
+function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, onAuth, isDark, onToggleTheme, profile }: {
   walletBalance: number;
   onMore: () => void;
   isDark: boolean;
@@ -927,6 +977,7 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
   onProfile: () => void;
   onNotice: (m: string) => void;
   onAuth: () => void;
+  profile: UserProfile;
 }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
@@ -950,8 +1001,9 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
               <WalletCards /><span className="hidden sm:inline">Connect Wallet</span><span className="sm:hidden">Connect</span>
             </Button>
           )}
-          <Button variant="outline" aria-label="Manage your account" title="Manage your account" onClick={onAuth} className="hidden size-9 shrink-0 rounded-full p-0 sm:flex sm:h-9 sm:w-auto sm:px-3">
-            <User /><span className="hidden sm:inline">Account</span>
+          <Button variant="outline" aria-label="Manage your account" title="Manage your account" onClick={onAuth} className="hidden h-9 shrink-0 rounded-full p-0 sm:flex sm:w-auto sm:px-3">
+            {profile.isAuthenticated ? <span className="grid size-7 place-items-center rounded-full bg-success/15 text-[10px] font-semibold text-success">{getProfileInitials(profile)}</span> : <User className="size-4" />}
+            <span className="hidden max-w-36 truncate md:inline">{profile.isAuthenticated ? profile.email ?? profile.displayName ?? "Account" : "Account"}</span>
           </Button>
           <button
             type="button"
@@ -964,11 +1016,17 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           <NotificationsPopover />
-          <button onClick={onProfile} aria-label="Open profile" className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-xs font-semibold transition-colors hover:border-success/50"><User className="size-4" /></button>
+          <button onClick={onProfile} aria-label="Open profile" className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-xs font-semibold transition-colors hover:border-success/50">{profile.isAuthenticated ? getProfileInitials(profile) : <User className="size-4" />}</button>
         </div>
       </div>
     </header>
   );
+}
+
+function getProfileInitials(profile: UserProfile) {
+  const name = profile.displayName?.trim();
+  if (name) return name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+  return profile.email?.[0]?.toUpperCase() ?? "U";
 }
 
 function MobileNav({ view, onView, onMore }: { view: View; onView: (v: View) => void; onMore: () => void; onAction?: () => void }) {

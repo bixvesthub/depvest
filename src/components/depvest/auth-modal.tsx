@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Mail, ShieldCheck, WalletCards } from "lucide-react";
+import { LoaderCircle, Mail, ShieldCheck, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,8 +17,9 @@ type AuthModalProps = {
   onOpenChange: (open: boolean) => void;
   initialIsSignUp?: boolean;
   profile: UserProfile;
-  onSignIn: (email: string, password: string, isSignUp: boolean) => void | Promise<void>;
-  onGoogleSignIn: () => void | Promise<void>;
+  onSignIn: (email: string, password: string, isSignUp: boolean) => Promise<void>;
+  onGoogleSignIn: () => Promise<void>;
+  onPasswordReset: (email: string) => Promise<void>;
   onLinkWallet: () => void;
 };
 
@@ -29,6 +30,7 @@ export function AuthModal({
   profile,
   onSignIn,
   onGoogleSignIn,
+  onPasswordReset,
   onLinkWallet,
 }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
@@ -37,12 +39,16 @@ export function AuthModal({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("account");
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
 
   useEffect(() => {
     if (open) {
       setIsSignUp(initialIsSignUp);
       setError("");
       setActiveTab("account");
+      setRecoveryMode(false);
+      setRecoverySent(false);
     }
   }, [initialIsSignUp, open]);
 
@@ -62,11 +68,7 @@ export function AuthModal({
     try {
       await onSignIn(trimmedEmail, password, isSignUp);
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Unable to continue. Please try again.",
-      );
+      setError(getAuthErrorMessage(submitError, isSignUp));
     } finally {
       setSubmitting(false);
     }
@@ -88,6 +90,29 @@ export function AuthModal({
     }
   };
 
+  const submitPasswordReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedEmail = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    setError("");
+    setSubmitting(true);
+    try {
+      await onPasswordReset(trimmedEmail);
+      setRecoverySent(true);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to send recovery instructions. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto border-border bg-popover">
@@ -101,8 +126,8 @@ export function AuthModal({
           </DialogDescription>
         </DialogHeader>
         <p className="rounded-md border border-warning/25 bg-warning/5 p-3 text-center text-[10px] leading-relaxed text-muted-foreground">
-          Secure account storage opens at launch; until then, your account lasts for this visit.
-          Use a password you don't use elsewhere.
+          Secure account storage opens at launch; until then, your account lasts for this visit. Use
+          a password you don't use elsewhere.
         </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
@@ -124,86 +149,160 @@ export function AuthModal({
               </div>
             ) : (
               <>
-                <div className="mb-4 flex items-center justify-center gap-2 text-xs">
-                  <span
-                    className={!isSignUp ? "font-semibold text-success" : "text-muted-foreground"}
-                  >
-                    Sign In
-                  </span>
-                  <button
-                    type="button"
-                    className="relative h-6 w-11 rounded-full border border-border bg-secondary p-0.5"
-                    role="switch"
-                    aria-checked={isSignUp}
-                    aria-label="Toggle create account"
-                    onClick={() => {
-                      setIsSignUp((value) => !value);
-                      setError("");
-                    }}
-                  >
-                    <span
-                      className={`block size-4 rounded-full bg-success transition-transform ${isSignUp ? "translate-x-5" : ""}`}
-                    />
-                  </button>
-                  <span
-                    className={isSignUp ? "font-semibold text-success" : "text-muted-foreground"}
-                  >
-                    Create Account
-                  </span>
-                </div>
-                <form onSubmit={submitEmail} className="space-y-3">
-                  <label className="grid gap-1.5 text-xs font-medium">
-                    Email
-                    <span className="relative">
-                      <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        autoComplete="email"
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        placeholder="you@example.com"
-                        required
-                      />
-                    </span>
-                  </label>
-                  <label className="grid gap-1.5 text-xs font-medium">
-                    Password
-                    <input
-                      autoComplete={isSignUp ? "new-password" : "current-password"}
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="At least 8 characters"
-                      minLength={8}
-                      required
-                    />
-                  </label>
-                  {error && (
-                    <p role="alert" className="text-xs text-destructive">
-                      {error}
+                {recoveryMode ? (
+                  <form onSubmit={submitPasswordReset} className="space-y-3">
+                    <p className="text-sm font-medium">Reset your password</p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Enter your account email to request password recovery.
                     </p>
-                  )}
-                  <Button type="submit" className="w-full rounded-full" disabled={submitting}>
-                    {submitting ? "Please wait…" : "Continue with Email"}
-                  </Button>
-                </form>
-                <div className="my-4 flex items-center gap-3 text-[10px] text-muted-foreground">
-                  <span className="h-px flex-1 bg-border" />
-                  or
-                  <span className="h-px flex-1 bg-border" />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full rounded-full"
-                  onClick={() => void submitGoogle()}
-                  disabled={submitting}
-                >
-                  <GoogleMark />
-                  Continue with Google
-                </Button>
+                    <label className="grid gap-1.5 text-xs font-medium">
+                      Email
+                      <span className="relative">
+                        <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          autoComplete="email"
+                          type="email"
+                          value={email}
+                          onChange={(event) => {
+                            setEmail(event.target.value);
+                            setRecoverySent(false);
+                          }}
+                          className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="you@example.com"
+                          required
+                        />
+                      </span>
+                    </label>
+                    {error && (
+                      <p role="alert" className="text-xs text-destructive">
+                        {error}
+                      </p>
+                    )}
+                    {recoverySent && (
+                      <p role="status" className="text-xs text-success">
+                        Recovery instructions requested for {email.trim()}.
+                      </p>
+                    )}
+                    <Button type="submit" className="w-full rounded-full" disabled={submitting}>
+                      {submitting && <LoaderCircle className="animate-spin" />}
+                      {submitting ? "Please wait…" : "Request recovery"}
+                    </Button>
+                    <button
+                      type="button"
+                      className="w-full text-center text-xs text-success hover:underline"
+                      onClick={() => {
+                        setRecoveryMode(false);
+                        setError("");
+                        setRecoverySent(false);
+                      }}
+                    >
+                      Back to sign in
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <div className="mb-4 flex items-center justify-center gap-2 text-xs">
+                      <span
+                        className={
+                          !isSignUp ? "font-semibold text-success" : "text-muted-foreground"
+                        }
+                      >
+                        Sign In
+                      </span>
+                      <button
+                        type="button"
+                        className="relative h-6 w-11 rounded-full border border-border bg-secondary p-0.5"
+                        role="switch"
+                        aria-checked={isSignUp}
+                        aria-label="Toggle create account"
+                        onClick={() => {
+                          setIsSignUp((value) => !value);
+                          setError("");
+                          setRecoverySent(false);
+                        }}
+                      >
+                        <span
+                          className={`block size-4 rounded-full bg-success transition-transform ${isSignUp ? "translate-x-5" : ""}`}
+                        />
+                      </button>
+                      <span
+                        className={
+                          isSignUp ? "font-semibold text-success" : "text-muted-foreground"
+                        }
+                      >
+                        Create Account
+                      </span>
+                    </div>
+                    <form onSubmit={submitEmail} className="space-y-3">
+                      <label className="grid gap-1.5 text-xs font-medium">
+                        Email
+                        <span className="relative">
+                          <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            autoComplete="email"
+                            type="email"
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            placeholder="you@example.com"
+                            required
+                          />
+                        </span>
+                      </label>
+                      <label className="grid gap-1.5 text-xs font-medium">
+                        Password
+                        <input
+                          autoComplete={isSignUp ? "new-password" : "current-password"}
+                          type="password"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="At least 8 characters"
+                          minLength={8}
+                          required
+                        />
+                      </label>
+                      {error && (
+                        <p role="alert" className="text-xs text-destructive">
+                          {error}
+                        </p>
+                      )}
+                      <Button type="submit" className="w-full rounded-full" disabled={submitting}>
+                        {submitting && <LoaderCircle className="animate-spin" />}
+                        {submitting ? "Please wait…" : isSignUp ? "Create Account" : "Sign In"}
+                      </Button>
+                    </form>
+                    {!isSignUp && (
+                      <button
+                        type="button"
+                        className="mt-3 w-full text-center text-xs text-success hover:underline"
+                        onClick={() => {
+                          setRecoveryMode(true);
+                          setError("");
+                          setRecoverySent(false);
+                        }}
+                      >
+                        Forgot Password?
+                      </button>
+                    )}
+                    <div className="my-4 flex items-center gap-3 text-[10px] text-muted-foreground">
+                      <span className="h-px flex-1 bg-border" />
+                      or
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full rounded-full"
+                      onClick={() => void submitGoogle()}
+                      disabled={submitting}
+                    >
+                      {submitting && <LoaderCircle className="animate-spin" />}
+                      <GoogleMark />
+                      Continue with Google
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </TabsContent>
@@ -259,6 +358,21 @@ export function AuthModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function getAuthErrorMessage(error: unknown, isSignUp: boolean) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (/weak|short|password.*(8|length)/.test(message))
+    return "Password must be at least 8 characters.";
+  if (/already|exists|registered|duplicate/.test(message))
+    return "An account with this email already exists. Sign in instead.";
+  if (/invalid|credential|unauthorized|password/.test(message))
+    return "Email or password is incorrect.";
+  if (isSignUp && message)
+    return error instanceof Error
+      ? error.message
+      : "Unable to create your account. Please try again.";
+  return error instanceof Error ? error.message : "Unable to continue. Please try again.";
 }
 
 function GoogleMark() {

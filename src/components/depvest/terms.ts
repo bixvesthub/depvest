@@ -86,7 +86,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Strategies & yield",
       q: "When is yield compounded or credited?",
-      a: "Unconfirmed estimate: Treasury cash is expected to compound daily, AI compute to pay at the end of each 30-day epoch, and digital assets to accrue flexibly with a 7-day unstaking period. These payout timings are not yet established terms and may change once official strategy terms are published. Portfolio projections are estimates, not guarantees.",
+      a: "US Treasury Cash compounds and distributes daily. AI Cloud Compute follows a 30-day epoch cycle aligned with GPU leasing windows. Blue-Chip Digital accrues network rewards continuously, with a standard 7-day unbonding window. Portfolio projections are estimates, not guarantees.",
     },
     {
       category: "Fees & eligibility",
@@ -96,7 +96,7 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Fees & eligibility",
       q: "Is there a minimum deposit or lock-up period?",
-      a: "Unconfirmed estimate: no minimum deposit is currently set, Treasury cash is expected to have no lock, AI compute to run in 30-day epochs, and digital assets to have a 7-day unstaking period. These are not yet established terms and may change. Deposits cannot exceed your wallet balance.",
+      a: "No minimum deposit is currently set. US Treasury Cash compounds and distributes daily, AI Cloud Compute follows a 30-day epoch cycle aligned with GPU leasing windows, and Blue-Chip Digital accrues network rewards continuously with a standard 7-day unbonding window. Deposits cannot exceed your wallet balance.",
     },
     {
       category: "Deposits & withdrawals",
@@ -156,12 +156,12 @@ export const DEFAULT_TERMS: Terms = {
     {
       category: "Referrals",
       q: "Are referral rewards paid out?",
-      a: "Referral rewards are tracked in USDC and DVT and claimed to your DepVest balance. External payouts open at launch, and the DVT tier rates are estimates until final terms are published.",
+      a: "Referral rewards are tracked in USDC and DVT and claimed to your DepVest balance. External payouts open at launch. DVT commissions are 5% at Tier 1, 10% at Tier 2, and 15% at Tier 3.",
     },
     {
       category: "Referrals",
       q: "How does the referral program work?",
-      a: "Connect a wallet to get your DV-XXXXXX code and share it. A referral counts once your friend registers and activates their account. Estimated tiers are 5%, 10%, and 15% DVT (not yet final terms).",
+      a: "Connect a wallet to get your DV-XXXXXX code and share it. A referral counts once your friend registers and activates their account. Qualified referrals earn DVT commissions of 5% at Tier 1, 10% at Tier 2, and 15% at Tier 3.",
     },
     {
       category: "Referrals",

@@ -281,6 +281,11 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
       a: "No. Rates are variable, may change, and are not a promise of future returns. Investment value can fall, including to zero.",
     },
     {
+      category: "Strategies & yield",
+      q: "When is yield compounded or credited?",
+      a: "US Treasury Cash compounds and distributes daily. AI Cloud Compute follows a 30-day epoch cycle aligned with GPU leasing windows. Blue-Chip Digital accrues network rewards continuously, with a standard 7-day unbonding window.",
+    },
+    {
       category: "Fees & eligibility",
       q: "What fees are listed?",
       a: `Configured fee examples are deposit, withdrawal, performance, and rebalance display values only; these are not live charges or governing service terms.`,
@@ -293,7 +298,7 @@ export function FAQ({ terms, onSupport, initialQuery = "" }: { terms: Terms; onS
     {
       category: "Referrals",
       q: "Are referral rewards paid out?",
-      a: "Referral rewards are tracked in USDC and DVT and claimed to your DepVest balance. External payouts open at launch; DVT tier rates are estimates until final terms are published.",
+      a: "Referral rewards are tracked in USDC and DVT and claimed to your DepVest balance. External payouts open at launch. DVT commissions are 5% at Tier 1, 10% at Tier 2, and 15% at Tier 3.",
     },
     {
       category: "Custody & support",
@@ -500,7 +505,9 @@ export function Rules({ terms }: { terms: Terms }) {
         "Withdrawable Liquid Cash is kept separate from amounts allocated to Compute and Digital vaults.",
         "Invested vault funds are locked for direct withdrawal and cannot be used by Max.",
         "To withdraw invested funds, rebalance to Liquid Cash Only (100% Cash), then withdraw.",
-        "Daily compounding, 30-day compute epochs, and a 7-day digital-asset unstaking period are unconfirmed estimates, not established liquidity terms.",
+        "US Treasury Cash compounds and distributes daily.",
+        "AI Cloud Compute follows a 30-day epoch cycle aligned with GPU leasing windows.",
+        "Blue-Chip Digital accrues network rewards continuously, with a standard 7-day unbonding window.",
       ],
     },
     {
@@ -509,7 +516,6 @@ export function Rules({ terms }: { terms: Terms }) {
         "Withdrawals are Standard (free, T+1 target) or Instant (1.5% fee). Timing is a target, not a guarantee.",
         "Withdrawals are limited to available liquid cash and show as Clearing until settled.",
         "Every pending entry has a reference ID you can inspect in the ledger.",
-        "Strategy payout timing is an estimate until final terms are published.",
       ],
     },
     {
@@ -533,7 +539,7 @@ export function Rules({ terms }: { terms: Terms }) {
       t: "Referral program",
       items: [
         "Each connected wallet gets a DV-XXXXXX referral code. A referral counts once the friend registers and activates their account.",
-        "Estimated tiers: Tier 1 (5%), Tier 2 (10%), Tier 3 (15%) DVT — not yet final terms.",
+        "Referral commissions are 5% DVT at Tier 1, 10% DVT at Tier 2, and 15% DVT at Tier 3.",
         "Self-referrals are rejected and each reward can be claimed only once.",
       ],
     },

@@ -22,7 +22,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { UserProfile } from "./types";
+import type { AccountPreferences, UserProfile } from "./types";
 
 export const WALLET_ADDRESS = "0x8a24…4e91";
 
@@ -166,7 +166,7 @@ export function NotificationsPopover() {
 
 /* ---------------- Profile ---------------- */
 
-export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConnect, onDisconnect, onInvite, onCopyReferral, onNotice, onAuth, onSignOut, profile }: {
+export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConnect, onDisconnect, onInvite, onCopyReferral, onNotice, onAuth, onSignOut, onUpdateProfile, profile, preferences }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   wallet: string | null;
@@ -177,11 +177,47 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
   onCopyReferral: () => void;
   onNotice: (m: string) => void;
   onAuth: () => void;
-  onSignOut: () => void;
+  onSignOut: () => Promise<void>;
+  onUpdateProfile: (displayName: string, preferences: AccountPreferences) => Promise<void>;
   profile: UserProfile;
+  preferences: AccountPreferences;
 }) {
   const [prefs, setPrefs] = useState({ yield: true, rebalance: true, security: true });
+  const [displayName, setDisplayName] = useState(profile.displayName ?? "");
+  const [profileError, setProfileError] = useState("");
+  const [signOutError, setSignOutError] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
   const toggle = (k: keyof typeof prefs) => setPrefs((p) => ({ ...p, [k]: !p[k] }));
+  useEffect(() => {
+    setDisplayName(profile.displayName ?? "");
+  }, [profile.displayName]);
+  const updateProfile = async (name: string, nextPreferences: AccountPreferences) => {
+    setProfileError("");
+    try {
+      await onUpdateProfile(name, nextPreferences);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Unable to update your profile.");
+    }
+  };
+  const saveDisplayName = async () => {
+    setSavingProfile(true);
+    try {
+      await updateProfile(displayName.trim(), preferences);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+  const signOut = async () => {
+    setSignOutError("");
+    try {
+      await onSignOut();
+    } catch (error) {
+      setSignOutError(error instanceof Error ? error.message : "Unable to sign out.");
+    }
+  };
+  const createdAt = profile.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+    : "Not available";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto border-border bg-popover sm:max-w-md">
@@ -189,7 +225,7 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
           <SheetTitle className="sr-only">Your profile</SheetTitle>
           <SheetDescription className="sr-only">Account details, security and preferences</SheetDescription>
           <div className="flex items-center gap-4">
-            <span className="grid size-14 shrink-0 place-items-center rounded-full border border-border bg-secondary text-lg font-semibold"><Users className="size-5" /></span>
+            <span className="grid size-14 shrink-0 place-items-center rounded-full border border-border bg-secondary text-lg font-semibold">{profile.isAuthenticated ? getProfileInitials(profile) : <Users className="size-5" />}</span>
             <div className="min-w-0">
               <p className="truncate text-lg font-semibold">{profile.displayName ?? "Guest investor"}</p>
               <p className="truncate text-xs text-muted-foreground">{profile.email ?? "DepVest account"}</p>
@@ -199,6 +235,22 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
         </SheetHeader>
 
         <div className="mt-6 space-y-5">
+          <section className="rounded-md border border-border bg-background/40 p-4">
+            <Eyebrow>Account details</Eyebrow>
+            <dl className="mt-3 space-y-2 text-xs">
+              <Row k="Email" v={profile.email ? <span className="inline-flex items-center gap-1.5">{profile.email}<span className={profile.emailVerified ? "text-success" : "text-muted-foreground"}>{profile.emailVerified ? "Verified" : "Unverified"}</span></span> : "Not verified"} />
+              <Row k="Account created" v={createdAt} />
+            </dl>
+            <label className="mt-4 grid gap-1.5 text-xs font-medium">
+              Display name
+              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={60} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" placeholder="Your name" />
+            </label>
+            <Button className="mt-3 w-full" variant="outline" onClick={() => void saveDisplayName()} disabled={savingProfile || !profile.isAuthenticated}>
+              {savingProfile ? <LoaderCircle className="animate-spin" /> : null}
+              {savingProfile ? "Saving…" : "Save display name"}
+            </Button>
+          </section>
+
           <section className="rounded-md border border-border bg-background/40 p-4">
             <Eyebrow>Account overview</Eyebrow>
             <dl className="mt-3 space-y-2 text-xs">
@@ -219,12 +271,44 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
           </section>
 
           <section className="rounded-md border border-border bg-background/40 p-4">
+            <Eyebrow>Linked wallets</Eyebrow>
+            <div className="mt-3 space-y-2">
+              {profile.linkedWallets.length ? profile.linkedWallets.map((linkedWallet) => (
+                <div key={`${linkedWallet.provider}:${linkedWallet.address}`} className="flex items-center gap-3 rounded-md border border-border bg-background/50 p-3">
+                  <Wallet className="size-4 shrink-0 text-success" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium">{linkedWallet.provider}</p>
+                    <p className="truncate font-mono text-[10px] text-muted-foreground">{linkedWallet.address}</p>
+                  </div>
+                  {linkedWallet.isPrimary && <span className="rounded-full border border-success/30 bg-success/10 px-2 py-1 text-[9px] text-success">Primary</span>}
+                </div>
+              )) : <p className="text-xs text-muted-foreground">No wallets linked to this account.</p>}
+              <Button variant="outline" className="w-full" onClick={onConnect}><Wallet />Link a wallet</Button>
+            </div>
+          </section>
+
+          <section className="rounded-md border border-border bg-background/40 p-4">
             <Eyebrow>Preferences</Eyebrow>
             <div className="mt-3 space-y-3 text-xs">
+              <label className="flex items-center justify-between gap-3">
+                <span>Risk tolerance</span>
+                <select
+                  aria-label="Risk tolerance"
+                  value={preferences.riskTolerance}
+                  onChange={(event) => void updateProfile(profile.displayName ?? "", { ...preferences, riskTolerance: event.target.value as AccountPreferences["riskTolerance"] })}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  <option>Conservative</option>
+                  <option>Balanced</option>
+                  <option>Aggressive</option>
+                </select>
+              </label>
+              <Pref label="Email notifications" checked={preferences.emailNotifications} onChange={() => void updateProfile(profile.displayName ?? "", { ...preferences, emailNotifications: !preferences.emailNotifications })} />
               <Pref label="Daily yield notifications" checked={prefs.yield} onChange={() => toggle("yield")} />
               <Pref label="Auto-rebalance alerts" checked={prefs.rebalance} onChange={() => toggle("rebalance")} />
               <Pref label="Security alerts" checked={prefs.security} onChange={() => toggle("security")} />
             </div>
+            {profileError && <p role="alert" className="mt-3 text-xs text-destructive">{profileError}</p>}
           </section>
 
           <div className="grid grid-cols-2 gap-2">
@@ -233,11 +317,20 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
             <Button variant="outline" onClick={() => onNotice("Tax report CSV prepared")}><ArrowDownToLine />Export CSV</Button>
           </div>
           {wallet && <Button variant="ghost" className="w-full text-destructive" onClick={onDisconnect}><LogOut />Disconnect wallet</Button>}
-          <Button variant="ghost" className="w-full text-muted-foreground" onClick={onSignOut}><LogOut />Sign out</Button>
+          {profile.isAuthenticated && <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => void signOut()}><LogOut />Sign out</Button>}
+          {signOutError && <p role="alert" className="text-center text-xs text-destructive">{signOutError}</p>}
         </div>
       </SheetContent>
     </Sheet>
   );
+}
+
+function getProfileInitials(profile: UserProfile) {
+  const name = profile.displayName?.trim();
+  if (name) {
+    return name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+  }
+  return profile.email?.[0]?.toUpperCase() ?? "U";
 }
 
 function Row({ k, v }: { k: string; v: ReactNode }) {
@@ -475,7 +568,7 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
   };
   return (
     <section>
-      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Only successfully registered referrals with activated accounts count toward your progress and rewards. Referral credits are paid in USDC; DVT commission tiers are estimates until final terms are published." />
+      <Intro eyebrow="Invite Friends" title="Grow together, earn together." copy="Referral rewards earn 5%, 10%, or 15% DVT commissions based on active qualified referrals." />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat icon={<Gift />} label="USDC rewards earned" value={`$${referralEarnings.toFixed(2)}`} />
         <Stat icon={<Users />} label="Qualified referrals" value={String(activeReferrals)} />

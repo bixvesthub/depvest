@@ -1,10 +1,17 @@
 export interface UserProfile {
   id: string;
   email: string | null;
+  emailVerified: boolean;
   displayName: string | null;
   avatarUrl: string | null;
+  createdAt: string | null;
   isAuthenticated: boolean;
   linkedWallets: LinkedWallet[];
+}
+
+export interface AccountPreferences {
+  riskTolerance: "Conservative" | "Balanced" | "Aggressive";
+  emailNotifications: boolean;
 }
 
 export interface LinkedWallet {
