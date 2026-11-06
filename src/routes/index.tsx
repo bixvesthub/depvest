@@ -36,6 +36,9 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AuthModal } from "@/components/depvest/auth-modal";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
+import { DEFAULT_PREFERENCES, GUEST_PROFILE, loadAccount, saveProfile, saveWalletLink } from "@/lib/account";
 import { DvtCard } from "@/components/depvest/dvt-card";
 import { DvtModal } from "@/components/depvest/dvt-modal";
 import type { AccountPreferences, DvtBalance, LinkedWallet, UserProfile } from "@/components/depvest/types";
@@ -323,7 +326,26 @@ function DepVestApp() {
   }, [isDark]);
 
   useEffect(() => {
-    setIsSessionLoading(false);
+    let active = true;
+    const apply = async (user: import("@supabase/supabase-js").User | null) => {
+      if (!user) {
+        if (active) { setProfile(GUEST_PROFILE); setPreferences(DEFAULT_PREFERENCES); setIsSessionLoading(false); }
+        return;
+      }
+      try {
+        const account = await loadAccount(user);
+        if (active) { setProfile(account.profile); setPreferences(account.preferences); }
+      } finally {
+        if (active) setIsSessionLoading(false);
+      }
+    };
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        setTimeout(() => void apply(session?.user ?? null), 0);
+      }
+    });
+    void supabase.auth.getUser().then(({ data }) => apply(data.user));
+    return () => { active = false; sub.subscription.unsubscribe(); };
   }, []);
 
   const showNotice = (message: string) => {
@@ -600,48 +622,33 @@ function DepVestApp() {
     setAuthOpen(true);
   };
   const [authIsSignUp, setAuthIsSignUp] = useState(false);
-  const handleSignIn = async (email: string, _password: string, isSignUp: boolean): Promise<void> => {
-    setProfile({
-      id: email.toLowerCase(),
-      email,
-      emailVerified: false,
-      displayName: email.split("@")[0] ?? null,
-      avatarUrl: null,
-      createdAt: new Date().toISOString(),
-      isAuthenticated: true,
-      linkedWallets: [],
-    });
+  const handleSignIn = async (email: string, password: string, isSignUp: boolean): Promise<void> => {
+    if (isSignUp) {
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
+      if (error) throw error;
+      setAuthOpen(false);
+      showNotice(data.session ? "Account created. Welcome to DepVest." : "Check your email to confirm your account, then sign in.");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
     setAuthOpen(false);
     setView("Portfolio");
-    showNotice(isSignUp ? "Account created. Welcome to DepVest." : "Signed in. Welcome back to DepVest.");
+    showNotice("Signed in. Welcome back to DepVest.");
   };
   const handleGoogleSignIn = async (): Promise<void> => {
-    setProfile({
-      id: "google-account",
-      email: null,
-      emailVerified: false,
-      displayName: "Google account",
-      avatarUrl: null,
-      createdAt: new Date().toISOString(),
-      isAuthenticated: true,
-      linkedWallets: [],
-    });
+    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    if (result.error) throw result.error instanceof Error ? result.error : new Error("Google sign-in failed.");
+    if (result.redirected) return;
     setAuthOpen(false);
     setView("Portfolio");
     showNotice("Signed in with Google.");
   };
   const handleSignOut = async (): Promise<void> => {
-    setProfile({
-      id: "local-guest",
-      email: null,
-      emailVerified: false,
-      displayName: null,
-      avatarUrl: null,
-      createdAt: null,
-      isAuthenticated: false,
-      linkedWallets: [],
-    });
-    setPreferences({ riskTolerance: "Balanced", emailNotifications: true });
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    setProfile(GUEST_PROFILE);
+    setPreferences(DEFAULT_PREFERENCES);
     setWallet(null);
     setLedger([]);
     setSettlementEvents([]);
@@ -663,6 +670,7 @@ function DepVestApp() {
   };
 
   const handleLinkWallet = async (address: string, provider: LinkedWallet["provider"]): Promise<void> => {
+    if (profile.isAuthenticated) await saveWalletLink(profile.id, address, provider);
     setProfile((current) => ({
       ...current,
       linkedWallets: [
@@ -673,12 +681,14 @@ function DepVestApp() {
   };
 
   const handleUpdateProfile = async (displayName: string, nextPreferences: AccountPreferences): Promise<void> => {
+    await saveProfile(profile.id, displayName, nextPreferences);
     setProfile((current) => ({ ...current, displayName: displayName || null }));
     setPreferences(nextPreferences);
   };
 
-  const handlePasswordReset = async (_email: string): Promise<void> => {
-    throw new Error("Password recovery is not connected until account services are available.");
+  const handlePasswordReset = async (email: string): Promise<void> => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+    if (error) throw error;
   };
 
   return (

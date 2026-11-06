@@ -126,8 +126,8 @@ export function AuthModal({
           </DialogDescription>
         </DialogHeader>
         <p className="rounded-md border border-warning/25 bg-warning/5 p-3 text-center text-[10px] leading-relaxed text-muted-foreground">
-          Secure account storage opens at launch; until then, your account lasts for this visit. Use
-          a password you don't use elsewhere.
+          Your account, profile and linked wallets are saved securely. Use a password you don't use
+          elsewhere.
         </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
