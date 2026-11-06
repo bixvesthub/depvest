@@ -403,7 +403,7 @@ export function TaskDialog({ flow, walletAddress, onWalletRequired, onClose, onC
         <span className="mx-auto grid size-14 place-items-center rounded-full bg-success/15 text-success"><Check className="size-6" /></span>
         <p className="text-lg font-semibold">Task accepted</p>
         <p className="font-mono text-3xl text-success">+{taskReward} session credit</p>
-        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-left text-[11px] text-muted-foreground">Accepted tasks add DVT to your pending credits. Claim them from Active Earn or Wallet & Ledger.</div>
+        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-left text-[11px] text-muted-foreground">Accepted tasks add DVT to your pending credits. Claim them from Active Earn or Wallet.</div>
         {receiptError && <p role="alert" className="text-xs text-destructive">Could not record this task completion. Please try again.</p>}
         <Button className="w-full" disabled={collecting} onClick={async () => {
           if (!walletAddress) return onWalletRequired();

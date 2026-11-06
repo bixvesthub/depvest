@@ -82,7 +82,7 @@ export const Route = createFileRoute("/")({
   component: DepVestApp,
 });
 
-type View = "Portfolio" | "Invest" | "Active Earn" | "Wallet & Ledger" | "Invite Friends" | "How It Works" | "Q&A" | "About" | "Rules" | "Support";
+type View = "Portfolio" | "Invest" | "Active Earn" | "Wallet" | "Invite Friends" | "How It Works" | "Q&A" | "About" | "Rules" | "Support";
 type Accent = "cash" | "cloud" | "digital" | "task";
 type ActivityStatus = "pending" | "completed" | "failed";
 type TransactionType = "wallet-snapshot" | "deposit" | "withdrawal" | "rebalance" | "task-payout" | "referral-claim" | "dvt-claim";
@@ -117,7 +117,7 @@ const navItems: Array<{ label: View; icon: typeof BarChart3; short: string }> = 
   { label: "Portfolio", short: "Portfolio", icon: BarChart3 },
   { label: "Invest", short: "Invest", icon: Coins },
   { label: "Active Earn", short: "Earn", icon: Zap },
-  { label: "Wallet & Ledger", short: "Wallet", icon: WalletCards },
+  { label: "Wallet", short: "Wallet", icon: WalletCards },
 ];
 
 const moreItems: Array<{ label: View; icon: typeof BarChart3; copy: string }> = [
@@ -720,7 +720,7 @@ function DepVestApp() {
         {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} unallocatedCash={unallocatedCash} showIdleBanner={!idleBannerDismissed} onDismissIdleBanner={() => setIdleBannerDismissed(true)} rows={allRows()} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={dvtBalance.lifetimeEarned} sessionCredits={dvtBalance.pending} onClaimDvt={claimPendingDvt} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
-        {view === "Wallet & Ledger" && <WalletLedger rows={allRows()} cash={availableCash} settledUnallocatedCash={unallocatedCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={dvtBalance.lifetimeEarned} dvtBalance={dvtBalance} onClaimDvt={claimPendingDvt} onOpenRoadmap={() => setDvtModalOpen(true)} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
+        {view === "Wallet" && <WalletLedger rows={allRows()} cash={availableCash} settledUnallocatedCash={unallocatedCash} pendingWithdrawals={pendingWithdrawals} investedCapital={investedCapital} walletBalance={walletBalance} earned={dvtBalance.lifetimeEarned} dvtBalance={dvtBalance} onClaimDvt={claimPendingDvt} onOpenRoadmap={() => setDvtModalOpen(true)} onAction={setAction} onReceipt={setReceipt} wallet={wallet} onConnect={() => setConnectOpen(true)} />}
         {view === "Invite Friends" && <InviteFriends
           referralCode={referralCode}
           referralEarnings={referralEarnings}
@@ -1259,7 +1259,7 @@ function Performance({ onAction, onView, onReceipt, rows, terms, alloc, balance 
             <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-[11px] font-medium">{item.title}</span><span className={cn("shrink-0 font-mono text-[10px]", item.value.startsWith("-") ? "text-muted-foreground" : "text-success")}>{item.value}</span></span><span className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-[9px] text-muted-foreground">{item.meta}</span><span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[9px]", item.status === "pending" ? "bg-warning/15 text-warning" : item.status === "completed" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>{statusLabel}</span></span></span>
           </button>;
         })}</div>
-        <button onClick={() => onView("Wallet & Ledger")} className="mt-4 w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-left text-[10px] font-medium text-success transition-colors hover:bg-secondary">View full ledger ({rows.length} {rows.length === 1 ? "transaction" : "transactions"}) →</button>
+        <button onClick={() => onView("Wallet")} className="mt-4 w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-left text-[10px] font-medium text-success transition-colors hover:bg-secondary">View full ledger ({rows.length} {rows.length === 1 ? "transaction" : "transactions"}) →</button>
       </div>}
     </section>
   );
@@ -1409,7 +1409,7 @@ function ActiveEarn({
 }
 
 function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, investedCapital, walletBalance, earned, dvtBalance, onClaimDvt, onOpenRoadmap, onAction, onReceipt, wallet, onConnect }: { rows: ActivityRow[]; cash: number; settledUnallocatedCash: number; pendingWithdrawals: number; investedCapital: number; walletBalance: number; earned: number; dvtBalance: DvtBalance; onClaimDvt: () => void; onOpenRoadmap: () => void; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
-  return <section><PageIntro eyebrow="Wallet & Ledger" title="Every movement, accounted for." copy="Review your connected wallet, withdrawable cash, locked vault holdings, and ledger receipts in one place." />
+  return <section><PageIntro eyebrow="Wallet" title="Every movement, accounted for." copy="Review your connected wallet, withdrawable cash, locked vault holdings, and ledger receipts in one place." />
     <DvtCard balance={dvtBalance} onClaimDvt={onClaimDvt} onOpenRoadmap={onOpenRoadmap} />
     <div className="mb-5 flex flex-col gap-3 rounded-[14px] border border-border bg-card p-5 sm:flex-row sm:items-center">
       <span className="vault-icon accent-cash shrink-0"><WalletCards className="size-5" /></span>
