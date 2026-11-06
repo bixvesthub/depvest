@@ -11,4 +11,4 @@
 
 ## Architecture
 
-- Keep DepVest as a UI-only single-route dashboard with local React state; no persistence; no server calls are wired into the UI.
+- DepVest is a single-route dashboard; accounts, profiles, preferences and linked wallets persist in Lovable Cloud (`profiles`, `wallet_links`, RLS own-row only) via `src/lib/account.ts`, while balances, ledger, tasks and referrals remain local React state until their backend phase — keeps persistence rolled out incrementally.
