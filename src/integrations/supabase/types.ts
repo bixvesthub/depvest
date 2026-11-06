@@ -14,7 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          email_notifications: boolean
+          id: string
+          risk_tolerance: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          email_notifications?: boolean
+          id: string
+          risk_tolerance?: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          email_notifications?: boolean
+          id?: string
+          risk_tolerance?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wallet_links: {
+        Row: {
+          address: string
+          id: string
+          is_primary: boolean
+          provider: string
+          user_id: string
+          verified_at: string
+        }
+        Insert: {
+          address: string
+          id?: string
+          is_primary?: boolean
+          provider: string
+          user_id: string
+          verified_at?: string
+        }
+        Update: {
+          address?: string
+          id?: string
+          is_primary?: boolean
+          provider?: string
+          user_id?: string
+          verified_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_links_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
