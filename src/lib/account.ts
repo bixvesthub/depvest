@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import type { AccountPreferences, LinkedWallet, UserProfile } from "@/components/depvest/types";
 
 export const GUEST_PROFILE: UserProfile = {
@@ -65,7 +66,6 @@ export async function saveWalletLink(userId: string, address: string, provider: 
 }
 
 /* ---------- Persisted ledger & account state ---------- */
-import type { Json } from "@/integrations/supabase/types";
 
 export type PersistedState = {
   settlementEvents?: Array<{ reference: string; status: "completed" | "failed"; timestamp: number }>;
