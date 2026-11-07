@@ -116,6 +116,11 @@ type ActivityRow = Readonly<{
   finalizedAt?: number;
 }>;
 
+const ICON_BY_TYPE: Partial<Record<TransactionType, typeof Zap>> = {
+  "wallet-snapshot": WalletCards, deposit: WalletCards, withdrawal: WalletCards, rebalance: BarChart3,
+  "task-payout": Zap, "referral-claim": Coins, "dvt-claim": Coins,
+};
+
 const navItems: Array<{ label: View; icon: typeof BarChart3; short: string }> = [
   { label: "Portfolio", short: "Portfolio", icon: BarChart3 },
   { label: "Invest", short: "Invest", icon: Coins },
@@ -325,6 +330,18 @@ function DepVestApp() {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
 
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!profile.isAuthenticated || !hydratedRef.current) return;
+    const timer = window.setTimeout(() => {
+      void saveAccountState(profile.id, {
+        settlementEvents, wallet, dvtBalance: { ...dvtBalance }, pendingReferralDvt, referralEarnings,
+        pendingReferralEarnings, activeReferrals, appliedReferralCode, tasksDone, tasksStarted, startedTaskTitles,
+      });
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [profile.isAuthenticated, profile.id, settlementEvents, wallet, dvtBalance, pendingReferralDvt, referralEarnings, pendingReferralEarnings, activeReferrals, appliedReferralCode, tasksDone, tasksStarted, startedTaskTitles]);
+
   useEffect(() => {
     let active = true;
     const apply = async (user: import("@supabase/supabase-js").User | null) => {
@@ -333,8 +350,29 @@ function DepVestApp() {
         return;
       }
       try {
-        const account = await loadAccount(user);
-        if (active) { setProfile(account.profile); setPreferences(account.preferences); }
+        hydratedRef.current = false;
+        const [account, saved] = await Promise.all([loadAccount(user), loadLedgerAndState(user.id)]);
+        if (active) {
+          setProfile(account.profile);
+          setPreferences(account.preferences);
+          const restored = saved.entries.map((row) => ({ ...row, icon: ICON_BY_TYPE[row.transactionType as TransactionType] ?? Coins }) as unknown as ActivityRow);
+          ledgerReferencesRef.current = new Set(restored.map((row) => row.reference));
+          setLedger(restored);
+          const st = saved.state;
+          setSettlementEvents(st.settlementEvents ?? []);
+          setWallet(st.wallet ?? null);
+          if (st.dvtBalance) setDvtBalance((current) => ({ ...current, ...st.dvtBalance }));
+          setPendingReferralDvt(st.pendingReferralDvt ?? 0);
+          setReferralEarnings(st.referralEarnings ?? 0);
+          setPendingReferralEarnings(st.pendingReferralEarnings ?? 0);
+          setActiveReferrals(st.activeReferrals ?? 0);
+          setAppliedReferralCode(st.appliedReferralCode ?? null);
+          setTasksDone(st.tasksDone ?? 0);
+          setTasksStarted(st.tasksStarted ?? 0);
+          setStartedTaskTitles(st.startedTaskTitles ?? []);
+          taskAttemptsRef.current = new Set(st.startedTaskTitles ?? []);
+          hydratedRef.current = true;
+        }
       } finally {
         if (active) setIsSessionLoading(false);
       }
@@ -414,6 +452,10 @@ function DepVestApp() {
       simulatedBlockNumber: options.simulatedBlockNumber ?? 19_482_104 + ledger.length,
     };
     setLedger((rows) => [...rows, entry]);
+    if (profile.isAuthenticated) {
+      const { icon: _icon, ...serializable } = entry;
+      void appendLedgerEntry(profile.id, reference, serializable);
+    }
     return entry;
   };
   const settleEntry = (reference: string, onSettled: () => void, message: string) => {
@@ -647,6 +689,7 @@ function DepVestApp() {
   const handleSignOut = async (): Promise<void> => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    hydratedRef.current = false;
     setProfile(GUEST_PROFILE);
     setPreferences(DEFAULT_PREFERENCES);
     setWallet(null);
