@@ -355,7 +355,7 @@ function DepVestApp() {
         if (active) {
           setProfile(account.profile);
           setPreferences(account.preferences);
-          const restored = saved.entries.map((row) => ({ ...row, icon: ICON_BY_TYPE[row.transactionType as TransactionType] ?? Coins }) as unknown as ActivityRow);
+          const restored = saved.entries.map((row) => ({ ...row, icon: ICON_BY_TYPE[row["transactionType"] as TransactionType] ?? Coins }) as unknown as ActivityRow);
           ledgerReferencesRef.current = new Set(restored.map((row) => row.reference));
           setLedger(restored);
           const st = saved.state;
