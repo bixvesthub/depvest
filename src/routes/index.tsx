@@ -38,7 +38,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AuthModal } from "@/components/depvest/auth-modal";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import { DEFAULT_PREFERENCES, GUEST_PROFILE, loadAccount, saveProfile, saveWalletLink } from "@/lib/account";
+import { DEFAULT_PREFERENCES, GUEST_PROFILE, appendLedgerEntry, loadAccount, loadLedgerAndState, saveAccountState, saveProfile, saveWalletLink } from "@/lib/account";
 import { DvtCard } from "@/components/depvest/dvt-card";
 import { DvtModal } from "@/components/depvest/dvt-modal";
 import type { AccountPreferences, DvtBalance, LinkedWallet, UserProfile } from "@/components/depvest/types";
