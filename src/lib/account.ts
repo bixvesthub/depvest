@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import type { AccountPreferences, LinkedWallet, UserProfile } from "@/components/depvest/types";
 
 export const GUEST_PROFILE: UserProfile = {
@@ -62,4 +63,44 @@ export async function saveWalletLink(userId: string, address: string, provider: 
     .from("wallet_links")
     .upsert({ user_id: userId, address, provider, is_primary: true }, { onConflict: "user_id,address,provider" });
   if (error) throw new Error("Unable to save this wallet to your account.");
+}
+
+/* ---------- Persisted ledger & account state ---------- */
+
+export type PersistedState = {
+  settlementEvents?: Array<{ reference: string; status: "completed" | "failed"; timestamp: number }>;
+  wallet?: string | null;
+  dvtBalance?: Record<string, number>;
+  pendingReferralDvt?: number;
+  referralEarnings?: number;
+  pendingReferralEarnings?: number;
+  activeReferrals?: number;
+  appliedReferralCode?: string | null;
+  tasksDone?: number;
+  tasksStarted?: number;
+  startedTaskTitles?: string[];
+};
+
+export async function loadLedgerAndState(userId: string) {
+  const [{ data: entries }, { data: stateRow }] = await Promise.all([
+    supabase.from("ledger_entries").select("entry").eq("user_id", userId).order("created_at", { ascending: true }),
+    supabase.from("account_state").select("state").eq("user_id", userId).maybeSingle(),
+  ]);
+  return {
+    entries: (entries ?? []).map((r) => r.entry as Record<string, unknown>),
+    state: (stateRow?.state ?? {}) as PersistedState,
+  };
+}
+
+/** Append-only: ledger entries are never updated or deleted. */
+export async function appendLedgerEntry(userId: string, reference: string, entry: Record<string, unknown>) {
+  const { error } = await supabase
+    .from("ledger_entries")
+    .upsert({ user_id: userId, reference, entry: entry as Json }, { onConflict: "user_id,reference", ignoreDuplicates: true });
+  if (error) console.error("Ledger save failed", error.message);
+}
+
+export async function saveAccountState(userId: string, state: PersistedState) {
+  const { error } = await supabase.from("account_state").upsert({ user_id: userId, state: state as Json });
+  if (error) console.error("Account state save failed", error.message);
 }
