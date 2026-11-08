@@ -755,7 +755,6 @@ function DepVestApp() {
       <>
       <Header
         onMore={() => setMoreOpen(true)}
-        onAuth={() => openAuth(false)}
         view={view}
         onView={go}
         wallet={wallet}
@@ -1017,7 +1016,7 @@ function LandingFeature({ icon, title, copy }: { icon: ReactNode; title: string;
   );
 }
 
-function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, onAuth, isDark, onToggleTheme, profile }: {
+function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, isDark, onToggleTheme, profile }: {
   walletBalance: number;
   onMore: () => void;
   isDark: boolean;
@@ -1029,7 +1028,6 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
   onDisconnect: () => void;
   onProfile: () => void;
   onNotice: (m: string) => void;
-  onAuth: () => void;
   profile: UserProfile;
 }) {
   return (
@@ -1054,10 +1052,6 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
               <WalletCards /><span className="hidden sm:inline">Connect Wallet</span><span className="sm:hidden">Connect</span>
             </Button>
           )}
-          <Button variant="outline" aria-label="Manage your account" title="Manage your account" onClick={onAuth} className="hidden h-9 shrink-0 rounded-full p-0 sm:flex sm:w-auto sm:px-3">
-            {profile.isAuthenticated ? <span className="grid size-7 place-items-center rounded-full bg-success/15 text-[10px] font-semibold text-success">{getProfileInitials(profile)}</span> : <User className="size-4" />}
-            <span className="hidden max-w-36 truncate md:inline">{profile.isAuthenticated ? profile.email ?? profile.displayName ?? "Account" : "Account"}</span>
-          </Button>
           <button
             type="button"
             onClick={onToggleTheme}
@@ -1069,7 +1063,20 @@ function Header({ view, onView, wallet, walletBalance, onConnect, onDisconnect, 
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           <NotificationsPopover />
-          <button onClick={onProfile} aria-label="Open profile" className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-xs font-semibold transition-colors hover:border-success/50">{profile.isAuthenticated ? getProfileInitials(profile) : <User className="size-4" />}</button>
+          <Button
+            variant="outline"
+            aria-label="Open account & profile"
+            title="Open account & profile"
+            onClick={onProfile}
+            className="flex h-9 shrink-0 items-center gap-2 rounded-full border-border bg-secondary/80 px-1.5 transition-colors hover:border-success/50 hover:bg-secondary sm:px-3"
+          >
+            <span className="grid size-6 place-items-center rounded-full bg-success/15 text-[11px] font-semibold text-success sm:size-7 sm:text-xs">
+              {profile.isAuthenticated ? getProfileInitials(profile) : <User className="size-4" />}
+            </span>
+            <span className="hidden max-w-32 truncate text-xs font-medium md:inline">
+              {profile.isAuthenticated ? profile.displayName ?? profile.email ?? "Account" : "Account"}
+            </span>
+          </Button>
         </div>
       </div>
     </header>
