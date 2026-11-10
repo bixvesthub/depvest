@@ -42,7 +42,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AuthModal } from "@/components/depvest/auth-modal";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import { DEFAULT_PREFERENCES, GUEST_PROFILE, appendLedgerEntry, loadAccount, loadLedgerAndState, saveAccountState, saveProfile, saveWalletLink } from "@/lib/account";
+import { DEFAULT_PREFERENCES, GUEST_PROFILE, appendLedgerEntry, loadAccount, loadLedgerAndState, prepareDemoLedger, saveAccountState, saveProfile, saveWalletLink } from "@/lib/account";
 import { DvtCard } from "@/components/depvest/dvt-card";
 import { DvtModal } from "@/components/depvest/dvt-modal";
 import type { AccountPreferences, DvtBalance, LinkedWallet, UserProfile } from "@/components/depvest/types";
@@ -325,6 +325,7 @@ function DepVestApp() {
   const referralDvtClaimInFlightRef = useRef(false);
   const [terms, setTerms] = useState<Terms>(DEFAULT_TERMS);
   const [ledger, setLedger] = useState<ActivityRow[]>([]);
+  const [demoLedgerResetAt, setDemoLedgerResetAt] = useState<number | null>(null);
   const [settlementEvents, setSettlementEvents] = useState<Array<{ reference: string; status: "completed" | "failed"; timestamp: number }>>([]);
   const [settlement, setSettlement] = useState<SettlementProgress | null>(null);
   const settlementInFlightRef = useRef<string | null>(null);
@@ -351,15 +352,15 @@ function DepVestApp() {
 
   const hydratedRef = useRef(false);
   useEffect(() => {
-    if (!profile.isAuthenticated || !hydratedRef.current) return;
+    if (!profile.isAuthenticated || !hydratedRef.current || demoLedgerResetAt == null) return;
     const timer = window.setTimeout(() => {
       void saveAccountState(profile.id, {
-        settlementEvents, wallet, dvtBalance: { ...dvtBalance }, pendingReferralDvt, referralEarnings,
+        demoLedgerResetAt, settlementEvents, wallet, dvtBalance: { ...dvtBalance }, pendingReferralDvt, referralEarnings,
         pendingReferralEarnings, activeReferrals, appliedReferralCode, tasksDone, tasksStarted, startedTaskTitles,
-      });
+      }).catch((error: unknown) => showNoticeRef.current(error instanceof Error ? error.message : "Unable to save your account state."));
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [profile.isAuthenticated, profile.id, settlementEvents, wallet, dvtBalance, pendingReferralDvt, referralEarnings, pendingReferralEarnings, activeReferrals, appliedReferralCode, tasksDone, tasksStarted, startedTaskTitles]);
+  }, [profile.isAuthenticated, profile.id, demoLedgerResetAt, settlementEvents, wallet, dvtBalance, pendingReferralDvt, referralEarnings, pendingReferralEarnings, activeReferrals, appliedReferralCode, tasksDone, tasksStarted, startedTaskTitles]);
 
   useEffect(() => {
     let active = true;
@@ -371,13 +372,16 @@ function DepVestApp() {
       try {
         hydratedRef.current = false;
         const [account, saved] = await Promise.all([loadAccount(user), loadLedgerAndState(user.id)]);
+        const demoLedger = prepareDemoLedger(saved.entries, saved.state);
+        if (demoLedger.didReset) await saveAccountState(user.id, demoLedger.state);
         if (active) {
           setProfile(account.profile);
           setPreferences(account.preferences);
-          const restored = saved.entries.map((row) => ({ ...row, icon: ICON_BY_TYPE[row["transactionType"] as TransactionType] ?? Coins }) as unknown as ActivityRow);
+          const restored = demoLedger.entries.map((row) => ({ ...row, icon: ICON_BY_TYPE[row["transactionType"] as TransactionType] ?? Coins }) as unknown as ActivityRow);
           ledgerReferencesRef.current = new Set(restored.map((row) => row.reference));
           setLedger(restored);
-          const st = saved.state;
+          const st = demoLedger.state;
+          setDemoLedgerResetAt(st.demoLedgerResetAt ?? null);
           setSettlementEvents(st.settlementEvents ?? []);
           if (st.dvtBalance) setDvtBalance((current) => ({ ...current, ...st.dvtBalance }));
           setPendingReferralDvt(st.pendingReferralDvt ?? 0);
@@ -391,6 +395,8 @@ function DepVestApp() {
           taskAttemptsRef.current = new Set(st.startedTaskTitles ?? []);
           hydratedRef.current = true;
         }
+      } catch (error) {
+        if (active) setNotice(error instanceof Error ? error.message : "Unable to restore your account. Please try again.");
       } finally {
         if (active) setIsSessionLoading(false);
       }
@@ -521,7 +527,7 @@ function DepVestApp() {
           return current.minimized ? null : { ...current, entry: finalizedEntry, step: 4 };
         });
         const label = transactionType === "rebalance" ? "Rebalance" : transactionType === "deposit" ? "Deposit" : "Withdrawal";
-        showReceiptNotice(`${label} finalized · ${fmt(amount)}`, finalizedEntry);
+        showReceiptNotice(`Demo ${label.toLowerCase()} recorded · ${fmt(amount)}`, finalizedEntry);
       }, durations[step]);
     };
     advance(0);
@@ -737,6 +743,7 @@ function DepVestApp() {
     setProfile(GUEST_PROFILE);
     setPreferences(DEFAULT_PREFERENCES);
     setLedger([]);
+    setDemoLedgerResetAt(null);
     setSettlementEvents([]);
     setSettlement(null);
     setDvtBalance({ total: 0, available: 0, locked: 0, pending: 0, lifetimeEarned: 0, lifetimePurchased: 0 });
@@ -858,6 +865,9 @@ function DepVestApp() {
       />
       {settlement?.minimized && <SettlementStatusBar settlement={settlement} onOpen={() => setSettlement((current) => current ? { ...current, minimized: false } : current)} />}
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] pt-6 sm:px-6 sm:pb-[calc(9rem+env(safe-area-inset-bottom,0px))] md:pt-8 lg:px-8 lg:pb-20">
+        <aside role="note" className="mb-5 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-xs text-warning">
+          <strong>Demo mode:</strong> portfolio balances and transactions are simulated. No funds are transferred. Connected-wallet balances are read-only.
+        </aside>
         {view === "Portfolio" && <Portfolio terms={terms} onAction={setAction} onNotice={showNotice} onView={go} onReceipt={setReceipt} alloc={alloc} total={portfolioTotal} unallocatedCash={unallocatedCash} showIdleBanner={!idleBannerDismissed} onDismissIdleBanner={() => setIdleBannerDismissed(true)} rows={allRows()} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Invest" && <Invest onAction={setAction} terms={terms} unallocatedCash={availableCash} total={portfolioTotal} alloc={alloc} balances={{ Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings }} />}
         {view === "Active Earn" && <ActiveEarn terms={terms} onAction={setAction} earned={dvtBalance.lifetimeEarned} sessionCredits={dvtBalance.pending} onClaimDvt={claimPendingDvt} done={tasksDone} attempts={tasksStarted} attemptedTasks={startedTaskTitles} taskLimit={TASK_SESSION_LIMIT} />}
@@ -903,36 +913,36 @@ function DepVestApp() {
           {noticeReceipt && <Button size="sm" className="h-8 shrink-0 rounded-full" onClick={() => { setReceipt(noticeReceipt); setSettlement((current) => current?.step === 4 ? null : current); setNotice(""); setNoticeReceipt(null); }}>View Receipt</Button>}
         </div>
       )}
-      <TransferDialog flow={flow} cash={availableCash} investedCapital={investedCapital} walletBalance={walletBalance} terms={terms} walletAddress={wallet} onWalletRequired={() => requireWallet(flow)} onRebalanceToCash={() => setFlow({ kind: "rebalance", initial: CASH_ONLY })} onClose={() => setFlow(null)} onNotice={showNotice}
-        onDeposit={(n, net, strategyAlloc, strategyName) => {
+      <TransferDialog flow={flow} cash={availableCash} investedCapital={investedCapital} walletBalance={walletBalance} walletAddress={wallet} onWalletRequired={() => requireWallet(flow)} onRebalanceToCash={() => setFlow({ kind: "rebalance", initial: CASH_ONLY })} onClose={() => setFlow(null)}
+        onDeposit={(n, strategyAlloc, strategyName) => {
           if (!wallet) return requireWallet(flow);
-          if (walletChainId?.toLowerCase() !== BASE_CHAIN_ID_HEX) return showNotice("Switch to Base in your wallet before depositing USDC.");
           if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before starting another transfer.");
-          if (n <= 0 || n > walletBalance) return showNotice("Deposit amount exceeds the connected wallet balance.");
+          if (n <= 0) return showNotice("Enter a valid demo deposit amount.");
           setFlow(null);
           const nextTotal = cents(portfolioTotal + n);
           const targetUnallocated = cents((nextTotal * strategyAlloc.Unallocated) / 100);
           const targetTreasury = cents((nextTotal * strategyAlloc.Treasury) / 100);
           const targetCloud = cents((nextTotal * strategyAlloc.Cloud) / 100);
           const targetDigital = cents(nextTotal - targetUnallocated - targetTreasury - targetCloud);
-          const entry = addEntry(`USDC deposit · ${strategyName} auto-deployed`, `+${fmt(n)}`, `${net} network • ${stamp()}`, "cash", Plus, {
+          const entry = addEntry(`Simulated USDC deposit · ${strategyName}`, `+${fmt(n)}`, `Demo only • ${stamp()}`, "cash", Plus, {
             status: "pending", transactionType: "deposit", vaultId: strategyName, settlementTier: "Clearing",
             feeBreakdown: { network: null, depvest: 0 },
-            grossAmount: n, netAmount: n, allocation: { Unallocated: strategyAlloc.Unallocated, Treasury: strategyAlloc.Treasury, Cloud: strategyAlloc.Cloud, Digital: strategyAlloc.Digital }, network: net,
-            balanceDeltas: { wallet: -n, unallocated: cents(targetUnallocated - unallocatedCash), treasury: cents(targetTreasury - treasuryHoldings), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
+            grossAmount: n, netAmount: n, allocation: { Unallocated: strategyAlloc.Unallocated, Treasury: strategyAlloc.Treasury, Cloud: strategyAlloc.Cloud, Digital: strategyAlloc.Digital },
+            balanceDeltas: { wallet: 0, unallocated: cents(targetUnallocated - unallocatedCash), treasury: cents(targetTreasury - treasuryHoldings), cloud: cents(targetCloud - cloudHoldings), digital: cents(targetDigital - digitalHoldings) },
+            network: "Demo",
           });
           startSettlement(entry, "deposit", n);
         }}
-        onWithdraw={(n, net, fee) => {
+        onWithdraw={(n, fee) => {
           if (!wallet) return requireWallet(flow);
           if (settlementInFlightRef.current || hasPendingTransfer) return showNotice("Wait for the current settlement to finish before starting another transfer.");
           if (n > availableCash) return showNotice("Withdrawal exceeds withdrawable liquid cash.");
           setFlow(null);
-          const entry = addEntry("USDC withdrawal", `-${fmt(n)}`, `${net} • ${stamp()}`, "digital", ArrowDownToLine, {
-            status: "pending", transactionType: "withdrawal", vaultId: "Connected wallet", settlementTier: net.includes("Instant") ? "Express" : "Standard T+1",
+          const entry = addEntry("Simulated USDC withdrawal", `-${fmt(n)}`, `Demo only • ${stamp()}`, "digital", ArrowDownToLine, {
+            status: "pending", transactionType: "withdrawal", vaultId: "Connected wallet", settlementTier: fee > 0 ? "Demo express" : "Demo standard",
             feeBreakdown: { network: null, depvest: fee },
-            grossAmount: n, netAmount: cents(n - fee), network: net.startsWith("Ethereum") ? "Ethereum" : "Base",
-            balanceDeltas: { wallet: n - fee, unallocated: -n, treasury: 0, cloud: 0, digital: 0 },
+            grossAmount: n, netAmount: cents(n - fee), network: "Demo",
+            balanceDeltas: { wallet: 0, unallocated: -n, treasury: 0, cloud: 0, digital: 0 },
           });
           startSettlement(entry, "withdrawal", n);
         }} />
@@ -1218,7 +1228,7 @@ function Portfolio({ terms, onAction, onNotice, onView, onReceipt, alloc, total,
           <Performance onAction={onAction} onView={onView} onReceipt={onReceipt} rows={rows} terms={terms} alloc={alloc} balance={total} />
           <div className="flex items-start gap-3 rounded-md border border-border bg-card p-5">
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary"><ShieldCheck className="size-4 text-muted-foreground" /></span>
-            <div><p className="text-xs font-medium">Institutional-grade custody</p><p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Custody and audit details will be published with the official product terms.</p></div>
+            <div><p className="text-xs font-medium">No custody integration</p><p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">This demo does not hold assets or execute blockchain transactions.</p></div>
           </div>
         </aside>
       </div>
@@ -1523,7 +1533,7 @@ function ActiveEarn({
           <p className="mt-3 font-mono text-4xl">{sessionCredits.toLocaleString("en-US")} DVT</p>
           <p className="mt-2 text-[10px] text-muted-foreground">Session Credits: {sessionCredits.toLocaleString("en-US")} DVT ({taskLimit} attempts limit · ≥70% accuracy)</p>
           <p className="mt-2 text-xs text-muted-foreground">{done} accepted · {attempts} of {taskLimit} attempts used</p>
-          <Button className="mt-4 w-full rounded-full" disabled={sessionCredits <= 0} onClick={onClaimDvt}>Claim {sessionCredits.toLocaleString("en-US")} DVT to Wallet</Button>
+          <Button className="mt-4 w-full rounded-full" disabled={sessionCredits <= 0} onClick={onClaimDvt}>Claim {sessionCredits.toLocaleString("en-US")} demo DVT</Button>
           <p className="mt-3 text-[10px] text-muted-foreground">Lifetime earned: {earned.toLocaleString("en-US")} DVT</p>
           <div className="mt-5">
             <ProgressRow label="Session limit" value={`${completedPercent}%`} />
@@ -1543,11 +1553,11 @@ function ActiveEarn({
 
 function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, investedCapital, walletBalance, walletProvider, walletChainId, earned, dvtBalance, onClaimDvt, onOpenRoadmap, onAction, onReceipt, wallet, onConnect }: { rows: ActivityRow[]; cash: number; settledUnallocatedCash: number; pendingWithdrawals: number; investedCapital: number; walletBalance: number; walletProvider: string | null; walletChainId: string | null; earned: number; dvtBalance: DvtBalance; onClaimDvt: () => void; onOpenRoadmap: () => void; onAction: (value: string) => void; onReceipt: (r: Receipt) => void; wallet: string | null; onConnect: () => void }) {
   const networkLabel = walletChainId?.toLowerCase() === BASE_CHAIN_ID_HEX ? "Base network" : walletChainId ? `Chain ${Number.parseInt(walletChainId, 16)}` : "Network unavailable";
-  return <section><PageIntro eyebrow="Wallet" title="Every movement, accounted for." copy="Review your connected wallet, withdrawable cash, locked vault holdings, and ledger receipts in one place." />
+  return <section><PageIntro eyebrow="Wallet" title="Wallet balance & demo ledger" copy="View the live read-only wallet balance alongside simulated portfolio activity. Deposits and withdrawals do not transfer funds." />
     <DvtCard balance={dvtBalance} onClaimDvt={onClaimDvt} onOpenRoadmap={onOpenRoadmap} />
     <div className="mb-5 flex flex-col gap-3 rounded-[14px] border border-border bg-card p-5 sm:flex-row sm:items-center">
       <span className="vault-icon accent-cash shrink-0"><WalletCards className="size-5" /></span>
-      <div className="min-w-0 flex-1">{wallet ? <><p className="text-sm font-semibold">{walletProvider ?? "Injected wallet"} connected</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{wallet} · {networkLabel}</p></> : <><p className="text-sm font-semibold">No wallet connected</p><p className="mt-1 text-[11px] text-muted-foreground">Connect a wallet to deposit and receive payouts.</p></>}</div>
+      <div className="min-w-0 flex-1">{wallet ? <><p className="text-sm font-semibold">{walletProvider ?? "Injected wallet"} connected</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{wallet} · {networkLabel}</p></> : <><p className="text-sm font-semibold">No wallet connected</p><p className="mt-1 text-[11px] text-muted-foreground">Connect a wallet to view its read-only balance; portfolio actions are simulated.</p></>}</div>
       <div className="grid grid-cols-2 gap-2 sm:flex">{wallet ? <><Button className="rounded-full" onClick={() => onAction("Deposit funds")}><Plus />Deposit</Button><Button variant="outline" className="rounded-full" onClick={() => onAction("Withdraw funds")}><ArrowDownToLine />Withdraw</Button></> : <Button className="col-span-2 rounded-full bg-success text-primary-foreground hover:bg-success/90" onClick={onConnect}><WalletCards />Connect Wallet</Button>}</div>
     </div>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 sm:gap-5">
@@ -1557,8 +1567,8 @@ function WalletLedger({ rows, cash, settledUnallocatedCash, pendingWithdrawals, 
       <WalletStat label="Total earned in DVT" value={`${earned.toLocaleString("en-US")} DVT`} note="Accepted Active Earn rewards" icon={<BarChart3 />} />
     </div>
     <div className="mt-4 rounded-md border border-success/25 bg-success/5 p-4 text-xs leading-relaxed">
-      <p className="font-medium">Ledger reconciliation</p>
-      <p className="mt-1 text-muted-foreground">The ledger tracks the external wallet separately from DepVest unallocated cash and locked Treasury, Cloud, and Digital vault holdings. Clearing withdrawals reserve unallocated cash until settlement. This session ledger is local to this dashboard session.</p>
+      <p className="font-medium">Demo ledger reconciliation</p>
+      <p className="mt-1 text-muted-foreground">The live connected-wallet balance is read-only. Deposits, withdrawals, and portfolio allocations update only the simulated DepVest ledger; no wallet transfers occur. Ledger entries are saved to your account.</p>
       <p className="mt-2 font-mono text-[10px] text-muted-foreground">External wallet {usd(wallet ? walletBalance : 0)} · DepVest: withdrawable {usd(cash)} + withdrawal reserve {usd(pendingWithdrawals)} = unallocated {usd(settledUnallocatedCash)}; + locked vaults {usd(investedCapital)} = portfolio {usd(settledUnallocatedCash + investedCapital)}</p>
     </div>
     <div className="mt-6 rounded-[14px] border border-border bg-card"><div className="border-b border-border p-5"><div className="min-w-0"><h2 className="text-sm font-semibold">Transaction ledger</h2><p className="mt-1 text-[10px] text-muted-foreground">Each entry has a unique reference, timestamp, fee breakdown, and clearing status. Tap an entry to view its receipt.</p></div></div><LedgerFilters rows={rows} onReceipt={onReceipt} /></div></section>;

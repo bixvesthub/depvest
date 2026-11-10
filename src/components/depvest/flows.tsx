@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { ArrowDownToLine, ArrowUpRight, Check, Copy, LockKeyhole, QrCode, RefreshCw, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { ArrowDownToLine, ArrowUpRight, Check, LockKeyhole, RefreshCw, ShieldCheck, Sparkles, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { Terms } from "./terms";
-
-export const DEPOSIT_ADDRESS = "0x8a24c9F31b07dE52a1C6f04B7e9D3a1f6b2c4e91";
 
 export type Alloc = Record<"Unallocated" | "Treasury" | "Cloud" | "Digital" | "Task", number>;
 export type DepositStrategyName = "Balanced Yield" | "Conservative Haven" | "Aggressive Tech" | "Liquid Cash Only" | "US Treasury Cash" | "AI Cloud Compute" | "Blue-Chip Index";
@@ -32,7 +30,6 @@ export type Flow =
 
 export type VaultInfo = { name: string; rate: string; rateLabel: string; risk: string; detail: string; balance: string; terms: string; accent: string };
 
-type Notice = (m: string) => void;
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const Cap = ({ children }: { children: React.ReactNode }) => <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{children}</span>;
 const Shell = ({ open, onClose, eyebrow, title, desc, children }: { open: boolean; onClose: () => void; eyebrow: string; title: string; desc: string; children: React.ReactNode }) => (
@@ -43,16 +40,13 @@ const Shell = ({ open, onClose, eyebrow, title, desc, children }: { open: boolea
     </DialogContent>
   </Dialog>
 );
-const Preview = () => <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><LockKeyhole className="size-3" />Confirm amounts and network fees in your wallet before signing</p>;
+const Preview = () => <p className="flex items-center gap-2 text-[10px] text-warning"><LockKeyhole className="size-3" />Demo only — this records a simulated entry; no funds move.</p>;
 
 /* ---------------- Deposit / Withdraw ---------------- */
-export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance = 0, terms, walletAddress, onWalletRequired, onRebalanceToCash, onClose, onDeposit, onWithdraw, onNotice }: { flow: Flow; cash: number; investedCapital?: number; walletBalance?: number; terms: Terms; walletAddress: string | null; onWalletRequired: () => void; onRebalanceToCash: () => void; onClose: () => void; onDeposit: (n: number, net: string, alloc: Alloc, strategyName: DepositStrategyName) => void; onWithdraw: (n: number, net: string, fee: number) => void; onNotice: Notice }) {
+export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance = 0, walletAddress, onWalletRequired, onRebalanceToCash, onClose, onDeposit, onWithdraw }: { flow: Flow; cash: number; investedCapital?: number; walletBalance?: number; walletAddress: string | null; onWalletRequired: () => void; onRebalanceToCash: () => void; onClose: () => void; onDeposit: (n: number, alloc: Alloc, strategyName: DepositStrategyName) => void; onWithdraw: (n: number, fee: number) => void }) {
   const isDeposit = flow?.kind === "deposit";
   const open = flow?.kind === "deposit" || flow?.kind === "withdraw";
-  const [net, setNet] = useState("Base");
   const [amount, setAmount] = useState("1000");
-  const [dest, setDest] = useState("");
-  const [qr, setQr] = useState(false);
   const [busy, setBusy] = useState(false);
   const [instant, setInstant] = useState(false);
   const initialAmount = flow?.kind === "deposit" ? flow.initialAmount : undefined;
@@ -62,39 +56,33 @@ export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance 
   const vaultStrategy = DEPOSIT_STRATEGIES.find((item) => item.name === vault);
   const defaultStrategy = initialStrategy ?? vaultStrategy?.name ?? "Balanced Yield";
   const [strategyName, setStrategyName] = useState<DepositStrategyName>("Balanced Yield");
-  useEffect(() => { if (open) { setAmount(isDeposit ? String(initialAmount ?? 1000) : "250"); setDest(""); setBusy(false); setQr(false); setInstant(false); setStrategyName(defaultStrategy); } }, [open, isDeposit, initialAmount, defaultStrategy]);
+  useEffect(() => { if (open) { setAmount(isDeposit ? String(initialAmount ?? 1000) : "250"); setBusy(false); setInstant(false); setStrategyName(defaultStrategy); } }, [open, isDeposit, initialAmount, defaultStrategy]);
   const selectedStrategy = DEPOSIT_STRATEGIES.find((item) => item.name === strategyName) ?? DEPOSIT_STRATEGIES[0]!;
   const strategy = initialAlloc && initialStrategy === strategyName ? { ...selectedStrategy, alloc: initialAlloc } : selectedStrategy;
   const n = Math.round((Number(amount) || 0) * 100) / 100;
   const fee = !isDeposit && instant ? Math.round(n * 1.5) / 100 : 0;
-  const dvFee = isDeposit ? terms.fees.deposit : instant ? `${money(fee)} (1.5% express)` : "Free (standard)";
+  const dvFee = isDeposit ? "Not charged (demo)" : instant ? `${money(fee)} (simulated)` : "Not charged (demo)";
   const withdrawalExceedsCash = !isDeposit && n > cash;
   const withdrawalNeedsRebalance = !isDeposit && (cash <= 0 || withdrawalExceedsCash);
-  const error = n <= 0 ? "Enter an amount" : n > 10_000_000 ? "Maximum is $10,000,000" : isDeposit && walletAddress && n > walletBalance ? `Wallet holds only ${money(walletBalance)} USDC` : withdrawalExceedsCash ? `Only ${money(cash)} withdrawable cash is available` : !isDeposit && !/^0x[a-fA-F0-9]{40}$/.test(dest.trim()) ? "Enter a valid 0x wallet address (42 characters)" : "";
+  const error = n <= 0 ? "Enter an amount" : n > 10_000_000 ? "Maximum is $10,000,000" : withdrawalExceedsCash ? `Only ${money(cash)} withdrawable demo cash is available` : "";
   const submit = () => {
     if (error || busy) return;
     if (!walletAddress) { onWalletRequired(); return; }
     setBusy(true);
-    if (isDeposit) onDeposit(n, net, strategy.alloc, strategy.name);
-    else onWithdraw(n, `${net} · ${instant ? `Instant, fee ${money(fee)}` : "Standard T+1"}`, fee);
+    if (isDeposit) onDeposit(n, strategy.alloc, strategy.name);
+    else onWithdraw(n, fee);
   };
   return (
-    <Shell open={open} onClose={onClose} eyebrow={isDeposit ? "Deposit · USDC" : "Withdraw · liquid USDC"} title={isDeposit ? (vault ? `Add funds to ${vault}` : "Deposit funds") : "Withdraw funds"} desc={isDeposit ? "Choose an amount to deposit from your connected wallet." : "Only settled liquid cash can be withdrawn directly."}>
+    <Shell open={open} onClose={onClose} eyebrow={isDeposit ? "Demo deposit · USDC" : "Demo withdrawal · USDC"} title={isDeposit ? (vault ? `Simulate funds in ${vault}` : "Simulate deposit") : "Simulate withdrawal"} desc={isDeposit ? "This records a demo portfolio entry. It does not transfer or deduct funds from your connected wallet." : "This records a demo portfolio entry. No USDC is sent to any wallet."}>
       <div className="space-y-5">
-        {open && <div className="rounded-md border border-success/25 bg-success/5 p-3 text-[11px]"><Cap>Authorizing wallet</Cap><p className="mt-1 font-mono text-success">{walletAddress ?? "Connect wallet to continue"}</p></div>}
+        {open && <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px]"><Cap>Simulation only</Cap><p className="mt-1 text-warning">No blockchain transaction will be sent and no wallet funds will move.</p><p className="mt-2 font-mono text-muted-foreground">{walletAddress ?? "Connect wallet to continue"}</p></div>}
         {!isDeposit && <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-background/40 p-3 text-[11px]">
           <div><Cap>Withdrawable Cash</Cap><p className="mt-1 font-mono text-sm font-semibold">{money(cash)}</p></div>
           <div><Cap>Invested in Vaults</Cap><p className="mt-1 font-mono text-sm font-semibold">{money(investedCapital)} <span className="text-[9px] font-normal text-muted-foreground">(Locked)</span></p></div>
         </div>}
-        <div><Cap>Network</Cap><div className="mt-2 grid grid-cols-2 gap-2">{["Base", "Ethereum"].map((x) => <button key={x} onClick={() => setNet(x)} className={cn("rounded-md border p-3 text-left text-sm", net === x ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><b className="block">{x}</b><span className="text-[10px] text-muted-foreground">Gas paid in your wallet</span></button>)}</div></div>
-        {isDeposit && <div className="rounded-md border border-border bg-background/40 p-3">
-          <div className="flex items-center justify-between"><Cap>Your USDC address ({net})</Cap><button onClick={() => setQr(!qr)} className="flex items-center gap-1 text-[10px] text-success"><QrCode className="size-3" />{qr ? "Hide" : "Show"} QR</button></div>
-          {qr && <div className="mx-auto my-3 grid size-36 grid-cols-12 gap-px rounded bg-foreground p-2">{Array.from({ length: 144 }, (_, i) => <span key={i} className={((i * 7919) % 13) % 3 === 0 || [0, 1, 12, 13, 10, 11, 22, 23, 120, 121, 132, 133].includes(i) ? "bg-background" : ""} />)}</div>}
-          <div className="mt-2 flex items-center gap-2"><code className="min-w-0 flex-1 truncate font-mono text-[11px]">{DEPOSIT_ADDRESS}</code><Button size="sm" variant="outline" className="rounded-full" onClick={() => { navigator.clipboard?.writeText(DEPOSIT_ADDRESS).catch(() => {}); onNotice(`Deposit: USDC ${net} address copied`); }}><Copy />Copy</Button></div>
-        </div>}
         <div><Cap>Amount (USDC)</Cap>
           <div className="mt-2 flex items-center rounded-md border border-input bg-background px-4"><span className="text-muted-foreground">$</span><input inputMode="decimal" maxLength={12} value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} className="h-12 w-full bg-transparent px-2 font-mono text-lg outline-none" /></div>
-          {walletAddress && <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground"><span>{isDeposit ? "Wallet balance" : "Withdrawable cash"}: <b className="font-mono text-foreground">{money(isDeposit ? walletBalance : cash)} USDC</b></span>{!isDeposit && <span>Wallet: <span className="font-mono">{money(walletBalance)}</span></span>}</div>}
+          {walletAddress && <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground"><span>{isDeposit ? "Connected wallet (read-only)" : "Withdrawable demo cash"}: <b className="font-mono text-foreground">{money(isDeposit ? walletBalance : cash)} USDC</b></span>{!isDeposit && <span>Wallet: <span className="font-mono">{money(walletBalance)}</span></span>}</div>}
           <div className="mt-2 flex flex-wrap gap-2">{(isDeposit ? [1000, 10000, 50000] : [100, 250, 1000]).map((p) => <button key={p} onClick={() => setAmount(String(p))} className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px]">{money(p)}</button>)}<button onClick={() => setAmount(String(Math.floor((isDeposit ? walletBalance : cash) * 100) / 100))} className="rounded-full bg-success/15 px-3 py-1 font-mono text-[10px] text-success">Max</button></div>
         </div>
         {isDeposit && <div>
@@ -112,11 +100,10 @@ export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance 
           {vaultStrategy && <p className="mt-2 text-[10px] text-muted-foreground">Opened from <b className="text-foreground">{vaultStrategy.name}</b>. Choose any strategy above to change the deployment.</p>}
           <p className="mt-2 text-[10px] text-muted-foreground">Confirming updates your target portfolio distribution across vaults.</p>
         </div>}
-        {!isDeposit && <div><Cap>Destination wallet</Cap><input value={dest} maxLength={42} onChange={(e) => setDest(e.target.value.trim())} placeholder="0x…" className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 font-mono text-xs outline-none" /><button onClick={() => setDest(DEPOSIT_ADDRESS)} className="mt-1 text-[10px] text-success">Use my connected wallet</button></div>}
-        {!isDeposit && <div role="radiogroup" aria-label="Settlement speed"><Cap>Settlement</Cap><div className="mt-2 space-y-2">{[{ k: false, t: "Standard Settlement", d: "Settles next day (T+1) or at next vault epoch", f: "FREE" }, { k: true, t: "Instant Express Settlement", d: "Immediate on-chain processing via emergency liquidity pools", f: "1.5%" }].map((o) => <button key={o.t} role="radio" aria-checked={instant === o.k} onClick={() => setInstant(o.k)} className={cn("flex w-full items-center gap-3 rounded-md border p-3 text-left", instant === o.k ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><span className={cn("size-3.5 shrink-0 rounded-full border", instant === o.k ? "border-success bg-success" : "border-muted-foreground")} /><span className="min-w-0 flex-1"><b className="block text-sm">{o.t}</b><span className="text-[10px] text-muted-foreground">{o.d}</span></span><span className="font-mono text-xs">{o.f}</span></button>)}</div></div>}
+        {!isDeposit && <div role="radiogroup" aria-label="Simulated withdrawal speed"><Cap>Demo settlement</Cap><div className="mt-2 space-y-2">{[{ k: false, t: "Standard (simulated)", d: "No withdrawal is sent", f: "No fee" }, { k: true, t: "Express (simulated)", d: "No on-chain processing", f: "Simulated 1.5%" }].map((o) => <button key={o.t} role="radio" aria-checked={instant === o.k} onClick={() => setInstant(o.k)} className={cn("flex w-full items-center gap-3 rounded-md border p-3 text-left", instant === o.k ? "border-success/50 bg-success/10" : "border-border bg-background/40")}><span className={cn("size-3.5 shrink-0 rounded-full border", instant === o.k ? "border-success bg-success" : "border-muted-foreground")} /><span className="min-w-0 flex-1"><b className="block text-sm">{o.t}</b><span className="text-[10px] text-muted-foreground">{o.d}</span></span><span className="font-mono text-xs">{o.f}</span></button>)}</div></div>}
         <div className="space-y-1 rounded-md bg-secondary/50 p-3 font-mono text-[11px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Network fee</span><span>Shown by your wallet</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">DepVest fee</span><span className={dvFee ? "" : "text-muted-foreground"}>{dvFee ?? "Unconfigured"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Network fee</span><span>None (demo)</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Simulated fee</span><span className={dvFee ? "" : "text-muted-foreground"}>{dvFee ?? "None"}</span></div>
           <div className="flex justify-between border-t border-border pt-1"><span className="text-muted-foreground">{isDeposit ? "Amount" : "You receive"}</span><b>{money(n - fee)}</b></div>
         </div>
         {withdrawalNeedsRebalance && <div className="space-y-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-[11px] text-warning" role="alert">
@@ -125,7 +112,7 @@ export function TransferDialog({ flow, cash, investedCapital = 0, walletBalance 
         </div>}
         {error && n > 0 && !withdrawalExceedsCash && <p className="text-[11px] text-destructive">{error}</p>}
         <Preview />
-        <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={!!error || busy} onClick={submit}>{busy ? "Processing…" : isDeposit ? "Confirm deposit" : "Withdraw now"}{!busy && (isDeposit ? <ArrowUpRight /> : <ArrowDownToLine />)}</Button></div>
+        <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={!!error || busy} onClick={submit}>{busy ? "Recording demo…" : isDeposit ? "Record demo deposit" : "Record demo withdrawal"}{!busy && (isDeposit ? <ArrowUpRight /> : <ArrowDownToLine />)}</Button></div>
       </div>
     </Shell>
   );
@@ -434,9 +421,9 @@ export function VaultDetailDialog({ vault, unallocatedCash, onClose, onDeposit, 
         </ul>
         <div className="grid gap-2 sm:grid-cols-2">
           <Button disabled={unallocatedCash <= 0} onClick={() => onAllocate(vault.name)}><ArrowUpRight />Deploy Available Cash</Button>
-          <Button variant="outline" onClick={() => onDeposit(vault.name)}><ArrowUpRight />Deposit More from Wallet</Button>
+          <Button variant="outline" onClick={() => onDeposit(vault.name)}><ArrowUpRight />Simulate More Funds</Button>
         </div>
-        <p className="text-[10px] leading-relaxed text-muted-foreground">Deploy Available Cash reallocates existing liquid balance internally. Deposit More from Wallet starts a separate USDC transfer from your connected wallet.</p>
+        <p className="text-[10px] leading-relaxed text-muted-foreground">This demo changes simulated portfolio balances only. No USDC is transferred from your connected wallet.</p>
       </div>}
     </Shell>
   );
@@ -453,7 +440,7 @@ export function exportLedgerCsv(rows: Array<{ title: string; value: string; meta
     r.vaultId ?? "",
     r.settlementTier ?? "",
     r.reference ?? "",
-    r.feeBreakdown?.network == null ? "Shown by wallet" : r.asset === "DVT" ? `${r.feeBreakdown.network.toFixed(2)} DVT` : money(r.feeBreakdown.network),
+    "None (demo)",
     r.asset === "DVT" ? `${(r.feeBreakdown?.depvest ?? 0).toFixed(2)} DVT` : money(r.feeBreakdown?.depvest ?? 0),
     r.meta,
   ].map(esc).join(","))].join("\n");

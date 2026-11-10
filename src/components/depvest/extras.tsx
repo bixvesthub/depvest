@@ -230,7 +230,7 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
             <dl className="mt-3 space-y-2 text-xs">
               
               <Row k="Membership" v="Standard" />
-              <Row k="Fees" v="0% deposit / withdraw" />
+              <Row k="Fees" v="None (demo only)" />
               <Row k="Referral code" v={referralCode ? <span className="inline-flex items-center gap-2 font-mono">{referralCode}<button type="button" aria-label="Copy referral code" className="text-success hover:text-success/80" onClick={onCopyReferral}><Copy className="size-3.5" /></button></span> : "Connect wallet"} />
             </dl>
           </section>
@@ -240,7 +240,7 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
             <dl className="mt-3 space-y-2 text-xs">
               <Row k="Primary wallet" v={wallet ? <span className="font-mono">{wallet}</span> : <button className="text-success" onClick={onConnect}>Connect wallet</button>} />
               <Row k="Two-factor auth" v={<span>Off</span>} />
-              <Row k="Custody" v="Regulated custodian" />
+              <Row k="Custody" v="No custody integration (demo)" />
             </dl>
           </section>
 
@@ -371,19 +371,19 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
       ? `Unallocated ${receipt.allocation.Unallocated}% · US Treasury ${receipt.allocation.Treasury}% · AI Compute ${receipt.allocation.Cloud}% · Blue-Chip ${receipt.allocation.Digital}%`
       : "Not applicable";
     const content = [
-      "DepVest transaction receipt",
-      `Status: ${receipt.status === "completed" ? "Finalized · Cleared via Authoritative Ledger" : receipt.status === "failed" ? "Failed" : "Settlement in progress"}`,
+      "DepVest demo transaction receipt",
+      `Status: Demo only · ${receipt.status === "completed" ? "Recorded" : receipt.status === "failed" ? "Failed" : "Recording in progress"}`,
       `Transaction type: ${receipt.transactionType ?? "Transaction"}`,
       `Description: ${receipt.title}`,
       `Reference ID: ${receipt.reference ?? "Not recorded"}`,
-      `Transaction hash: ${receipt.transactionHash ?? "Not recorded"}`,
+      `Demo transaction ID (not a blockchain transaction): ${receipt.transactionHash ?? "Not recorded"}`,
       `UTC date: ${timestamp == null ? "Not recorded" : new Date(timestamp).toISOString().slice(0, 10)}`,
       `Local time: ${timestamp == null ? "Not recorded" : new Date(timestamp).toLocaleString()}`,
       `Gross amount: ${receiptAssetAmount(gross, receipt.asset)}`,
       `DepVest fee: ${receiptAssetAmount(fee, receipt.asset)}${fee > 0 && receipt.settlementTier === "Express" ? " (1.5% Instant fee)" : ""}`,
       `Net settled amount: ${receiptAssetAmount(settled, receipt.asset)}`,
       `Allocation: ${allocation}`,
-      `Network: ${receipt.network ?? "Base"} · Ledger block #${receipt.simulatedBlockNumber ?? "—"}`,
+      `Demo ledger: ${receipt.network ?? "Demo"} · Simulated block #${receipt.simulatedBlockNumber ?? "—"}`,
       `Vault: ${receipt.vaultId ?? "DepVest portfolio"}`,
       `Settlement tier: ${receipt.settlementTier ?? "Standard T+1"}`,
       `Details: ${receipt.meta}`,
@@ -409,25 +409,25 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
         {receipt && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={cn("rounded-full px-3 py-1 text-[10px] font-medium", receipt.status === "pending" ? "bg-warning/15 text-warning" : receipt.status === "failed" ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>{receipt.status === "pending" ? "Settlement in progress" : receipt.status === "failed" ? "Failed" : "Finalized"}</span>
-              {receipt.status === "completed" && <span className="rounded-full border border-success/25 bg-success/5 px-3 py-1 text-[10px] text-success">Cleared via Authoritative Ledger</span>}
+              <span className={cn("rounded-full px-3 py-1 text-[10px] font-medium", receipt.status === "pending" ? "bg-warning/15 text-warning" : receipt.status === "failed" ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>{receipt.status === "pending" ? "Demo entry in progress" : receipt.status === "failed" ? "Failed" : "Recorded (demo)"}</span>
+              <span className="rounded-full border border-warning/30 bg-warning/10 px-3 py-1 text-[10px] text-warning">Demo only · no funds transferred</span>
             </div>
-            <p className="text-[10px] text-muted-foreground">DepVest ledger receipt · on-chain settlement opens at launch.</p>
+            <p className="text-[10px] text-muted-foreground">Demo ledger receipt · no blockchain transaction was sent.</p>
             <p className="font-mono text-3xl text-success">{receipt.value}</p>
             <dl className="space-y-3 rounded-md border border-border bg-background/40 p-4 text-xs">
               <Row k="Transaction type" v={receipt.transactionType ?? "Transaction"} />
               <Row k="Reference ID" v={<span className="flex max-w-[65%] items-center gap-2"><span className="break-all font-mono text-[10px]">{receipt.reference ?? "Not recorded"}</span>{receipt.reference && <button type="button" aria-label="Copy reference ID" className="shrink-0 text-success" onClick={() => void copyValue(receipt.reference!, "Reference ID")}><Copy className="size-3.5" /></button>}</span>} />
-              <Row k="Transaction hash" v={<span className="flex max-w-[65%] items-center gap-2"><span className="break-all font-mono text-[10px]">{receipt.transactionHash ?? "Not recorded"}</span>{receipt.transactionHash && <button type="button" aria-label="Copy transaction hash" className="shrink-0 text-success" onClick={() => void copyValue(receipt.transactionHash!, "Transaction hash")}><Copy className="size-3.5" /></button>}</span>} />
+              <Row k="Demo transaction ID" v={<span className="flex max-w-[65%] items-center gap-2"><span className="break-all font-mono text-[10px]">{receipt.transactionHash ?? "Not recorded"}</span>{receipt.transactionHash && <button type="button" aria-label="Copy demo transaction ID" className="shrink-0 text-success" onClick={() => void copyValue(receipt.transactionHash!, "Demo transaction ID")}><Copy className="size-3.5" /></button>}</span>} />
               <Row k="UTC date" v={timestamp == null ? "Not recorded" : new Date(timestamp).toISOString().slice(0, 10)} />
               <Row k="Local time" v={timestamp == null ? "Not recorded" : new Date(timestamp).toLocaleString()} />
               <div className="border-t border-border pt-3"><Row k="Gross amount" v={<span className="font-mono">{receiptAssetAmount(gross, receipt.asset)}</span>} /></div>
-              <Row k="Fee deduction" v={<span className="text-right font-mono">{receiptAssetAmount(fee, receipt.asset)}{fee > 0 && receipt.settlementTier === "Express" && <span className="ml-1 block font-sans text-[9px] text-muted-foreground">1.5% Instant fee</span>}</span>} />
+              <Row k="Simulated fee deduction" v={<span className="text-right font-mono">{receiptAssetAmount(fee, receipt.asset)}{fee > 0 && /express/i.test(receipt.settlementTier ?? "") && <span className="ml-1 block font-sans text-[9px] text-muted-foreground">Simulated 1.5% fee</span>}</span>} />
               <Row k="Net settled amount" v={<span className="font-mono font-semibold text-success">{receiptAssetAmount(settled, receipt.asset)}</span>} />
               {receipt.allocation && <Row k="Strategy allocation" v={<span className="text-right text-[10px]">Unallocated {receipt.allocation.Unallocated}%<br />US Treasury {receipt.allocation.Treasury}%<br />AI Compute {receipt.allocation.Cloud}%<br />Blue-Chip {receipt.allocation.Digital}%</span>} />}
-              <Row k="Network · ledger block" v={<span>{receipt.network ?? "Base"} #{receipt.simulatedBlockNumber ?? "—"}</span>} />
-              <Row k="Vault / destination" v={receipt.vaultId ?? "DepVest portfolio"} />
-              <Row k="Settlement tier" v={receipt.settlementTier ?? "Standard T+1"} />
-              <Row k="Network fee" v={receipt.feeBreakdown?.network == null ? "Shown by wallet" : receiptAssetAmount(receipt.feeBreakdown.network, receipt.asset)} />
+              <Row k="Demo ledger · simulated block" v={<span>{receipt.network ?? "Demo"} #{receipt.simulatedBlockNumber ?? "—"}</span>} />
+              <Row k="Vault / demo target" v={receipt.vaultId ?? "DepVest portfolio"} />
+              <Row k="Demo settlement tier" v={receipt.settlementTier ?? "Demo standard"} />
+              <Row k="Network fee" v="None (demo)" />
               <Row k="Details" v={<span className="max-w-[65%] text-[10px]">{receipt.meta}</span>} />
             </dl>
             <div className="grid grid-cols-3 gap-2">
@@ -443,10 +443,10 @@ export function ReceiptDialog({ receipt, onClose, onNotice }: { receipt: Receipt
 }
 
 const settlementStages = [
-  { title: "Parameter Verification", description: "Validating wallet balance and liquidity constraints." },
-  { title: "Ledger Inscription", description: "Generating the authoritative reference and transaction hash, then calculating fees." },
-  { title: "Network Confirmation", description: "Broadcasting and awaiting network confirmation." },
-  { title: "Settlement Finalized", description: "Applying the balance update to available cash and vault allocations." },
+  { title: "Demo input validation", description: "Checking the simulated amount and portfolio limits." },
+  { title: "Recording demo entry", description: "Generating a local demo reference." },
+  { title: "Simulated confirmation", description: "No blockchain transaction is sent." },
+  { title: "Demo update complete", description: "Updating simulated portfolio balances." },
 ];
 
 export function SettlementStatusBar({ settlement, onOpen }: { settlement: SettlementProgress; onOpen: () => void }) {
@@ -454,7 +454,7 @@ export function SettlementStatusBar({ settlement, onOpen }: { settlement: Settle
   return (
     <button type="button" onClick={onOpen} className="sticky top-16 z-40 mx-auto flex w-full max-w-[1440px] items-center gap-2 border-b border-success/25 bg-popover/95 px-4 py-2.5 text-left text-[11px] shadow-card backdrop-blur sm:px-6 lg:px-8">
       <LoaderCircle className="size-3.5 shrink-0 animate-spin text-success" />
-      <span className="min-w-0 flex-1 truncate">Settlement in progress: {type} {receiptMoney(settlement.amount)} · Ref {settlement.entry.transactionHash} — Step {settlement.step + 1}/4</span>
+      <span className="min-w-0 flex-1 truncate">Demo {type.toLowerCase()} in progress: {receiptMoney(settlement.amount)} · Step {settlement.step + 1}/4</span>
       <span className="shrink-0 text-success">Tap to view</span>
     </button>
   );
@@ -466,14 +466,14 @@ export function SettlementProgressDialog({ settlement, onMinimize, onClose, onVi
     <Dialog open={!settlement.minimized} onOpenChange={(open) => { if (!open && settlement.step === 4) onClose(); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto border-border bg-popover sm:max-w-lg">
         <DialogHeader className="text-left">
-          <Eyebrow>Authoritative ledger pipeline</Eyebrow>
-          <DialogTitle className="text-xl">{settlement.step === 4 ? "Settlement Finalized" : "Settlement in Progress"}</DialogTitle>
-          <DialogDescription>{type} · {receiptMoney(settlement.amount)} · {settlement.entry.network}</DialogDescription>
+          <Eyebrow>Demo simulation · no funds move</Eyebrow>
+          <DialogTitle className="text-xl">{settlement.step === 4 ? "Demo entry recorded" : "Recording demo entry"}</DialogTitle>
+          <DialogDescription>{type} · {receiptMoney(settlement.amount)} · no on-chain transaction</DialogDescription>
         </DialogHeader>
         <div className="rounded-md border border-border bg-background/40 p-3 text-[10px]">
           <p className="text-muted-foreground">Transaction reference</p>
           <p className="mt-1 break-all font-mono">{settlement.entry.reference}</p>
-          <p className="mt-2 break-all font-mono text-success">{settlement.entry.transactionHash}</p>
+          <p className="mt-2 break-all font-mono text-success">Demo ID: {settlement.entry.transactionHash}</p>
         </div>
         <ol className="space-y-2">
           {settlementStages.map((stage, index) => {
@@ -483,12 +483,12 @@ export function SettlementProgressDialog({ settlement, onMinimize, onClose, onVi
               <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border", complete ? "border-success bg-success/15 text-success" : active ? "border-success/50 text-success" : "border-border text-muted-foreground")}>
                 {complete ? <Check className="size-4" /> : active ? <LoaderCircle className="size-4 animate-spin" /> : <span className="font-mono text-[10px]">{index + 1}</span>}
               </span>
-              <span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-xs font-medium">{stage.title}{active && <i className="size-1.5 animate-pulse rounded-full bg-success" />}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{index === 2 ? `Broadcasting on ${settlement.entry.network} and awaiting confirmation.` : stage.description}</span></span>
+              <span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-xs font-medium">{stage.title}{active && <i className="size-1.5 animate-pulse rounded-full bg-success" />}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{stage.description}</span></span>
               {active && <span className="shrink-0 font-mono text-[9px] text-success">{index === 0 ? "700 ms" : index === 1 ? "900 ms" : index === 2 ? "1,200 ms" : "600 ms"}</span>}
             </li>;
           })}
         </ol>
-        {settlement.step === 4 && <p className="rounded-md border border-success/25 bg-success/5 p-3 text-xs text-success">Balances have been updated in this dashboard session. The receipt is ready.</p>}
+        {settlement.step === 4 && <p className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">Only simulated dashboard balances were updated. No wallet funds moved.</p>}
         <div className="flex justify-end gap-2">
           {settlement.step < 4 ? <Button variant="outline" onClick={onMinimize}>Minimize</Button> : <Button variant="outline" onClick={onClose}>Close</Button>}
           {settlement.step === 4 && <Button onClick={onViewReceipt}>View Receipt</Button>}
@@ -602,8 +602,8 @@ export function InviteFriends({ referralCode, referralEarnings, pendingReferralE
         <div className="rounded-[14px] border border-border bg-card">
           <div className="border-b border-border p-5"><p className="text-sm font-semibold">Referral rewards</p><p className="mt-1 text-[10px] text-muted-foreground">Available to claim: {pendingDvtRewards.toFixed(2)} DVT · ${pendingReferralEarnings.toFixed(2)} USDC</p></div>
           <div className="space-y-3 p-5">
-            <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Claim USDC to Wallet</Button>
-            <Button variant="outline" className="w-full rounded-full" disabled={pendingDvtRewards <= 0} onClick={onClaimDvt}><Gift />Claim DVT to Wallet</Button>
+            <Button className="w-full rounded-full" disabled={pendingReferralEarnings <= 0} onClick={onClaim}><Gift />Record demo USDC claim</Button>
+            <Button variant="outline" className="w-full rounded-full" disabled={pendingDvtRewards <= 0} onClick={onClaimDvt}><Gift />Claim demo DVT</Button>
             <p className="text-[10px] leading-relaxed text-muted-foreground">Claimed rewards are recorded in your ledger and credited to your DepVest balance.</p>
             <div className="border-t border-border pt-4">
               <p className="text-xs font-medium">Qualified referral check</p>

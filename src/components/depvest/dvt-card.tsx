@@ -34,7 +34,7 @@ export function DvtCard({ balance, onClaimDvt, onOpenRoadmap }: DvtCardProps) {
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-success shadow-[0_0_10px_hsl(var(--success))]" />
             <h2 id="dvt-card-title" className="text-base font-semibold">
-              DepVest Token (DVT)
+              Demo DVT credits
             </h2>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -42,7 +42,7 @@ export function DvtCard({ balance, onClaimDvt, onOpenRoadmap }: DvtCardProps) {
           </p>
         </div>
         <span className="rounded-full border border-success/25 bg-success/10 px-2.5 py-1 text-[10px] font-medium text-success">
-          DVT Wallet
+          Demo balance
         </span>
       </div>
 

@@ -68,6 +68,7 @@ export async function saveWalletLink(userId: string, address: string, provider: 
 /* ---------- Persisted ledger & account state ---------- */
 
 export type PersistedState = {
+  demoLedgerResetAt?: number;
   settlementEvents?: Array<{ reference: string; status: "completed" | "failed"; timestamp: number }>;
   wallet?: string | null;
   dvtBalance?: Record<string, number>;
@@ -80,6 +81,21 @@ export type PersistedState = {
   tasksStarted?: number;
   startedTaskTitles?: string[];
 };
+
+export function prepareDemoLedger(
+  entries: Array<Record<string, unknown>>,
+  state: PersistedState,
+  now = Date.now(),
+) {
+  const savedResetAt = state.demoLedgerResetAt;
+  const hasResetAt = typeof savedResetAt === "number" && Number.isFinite(savedResetAt);
+  const resetAt = hasResetAt ? savedResetAt : now;
+  return {
+    entries: entries.filter((entry) => typeof entry["timestamp"] === "number" && entry["timestamp"] >= resetAt),
+    state: hasResetAt ? state : { ...state, demoLedgerResetAt: resetAt },
+    didReset: !hasResetAt,
+  };
+}
 
 export async function loadLedgerAndState(userId: string) {
   const [{ data: entries }, { data: stateRow }] = await Promise.all([
@@ -102,5 +118,5 @@ export async function appendLedgerEntry(userId: string, reference: string, entry
 
 export async function saveAccountState(userId: string, state: PersistedState) {
   const { error } = await supabase.from("account_state").upsert({ user_id: userId, state: state as Json });
-  if (error) console.error("Account state save failed", error.message);
+  if (error) throw new Error("Unable to save your account state. Please try again.");
 }
