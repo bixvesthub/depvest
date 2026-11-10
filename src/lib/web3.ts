@@ -16,7 +16,7 @@ const wagmiAdapter = new WagmiAdapter({
 
 export const wagmiConfig = wagmiAdapter.wagmiConfig;
 
-createAppKit({
+if (typeof window !== "undefined") createAppKit({
   // The adapter's namespace declaration conflicts with AppKit's exact-optional type.
   adapters: [wagmiAdapter as ChainAdapter],
   networks,

@@ -70,6 +70,7 @@ import { createReferralCode, qualifiesReferral } from "@/lib/referral";
 import { BASE_CHAIN_ID_HEX, BASE_USDC_CONTRACT, type RealWalletState } from "@/lib/wallet";
 
 export const Route = createFileRoute("/")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "DepVest — Multi-Asset Hub" },
