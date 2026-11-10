@@ -25,7 +25,7 @@ createAppKit({
   metadata: {
     name: "DepVest",
     description: "Multi-Asset Investment Hub",
-    url: "https://depvest.com",
+    url: typeof window !== "undefined" ? window.location.origin : "https://depvest.com",
     icons: ["https://depvest.com/favicon.ico"],
   },
   features: {
