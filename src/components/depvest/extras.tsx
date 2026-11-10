@@ -31,9 +31,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { connectInjectedWallet, hasInjectedWallet, BASE_CHAIN_ID_HEX, type RealWalletState } from "@/lib/wallet";
 import type { AccountPreferences, UserProfile } from "./types";
-
-export const WALLET_ADDRESS = "0x8a24…4e91";
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{children}</span>;
@@ -51,77 +50,81 @@ function Intro({ eyebrow, title, copy }: { eyebrow: string; title: string; copy:
 
 /* ---------------- Connect wallet ---------------- */
 
-const wallets = [
-  { name: "MetaMask", note: "Browser extension", tag: "Popular" },
-  { name: "Coinbase Wallet", note: "Mobile & extension", tag: "Base native" },
-  { name: "Ledger (Hardware Wallet)", note: "Connect a Ledger hardware device", tag: "Hardware wallet" },
-  { name: "Phantom", note: "Multi-chain wallet", tag: "" },
-  { name: "WalletConnect", note: "Scan with any mobile wallet", tag: "" },
-];
-
-export function ConnectWalletDialog({ open, onOpenChange, onConnected }: { open: boolean; onOpenChange: (v: boolean) => void; onConnected: (wallet: string) => void }) {
-  const [pending, setPending] = useState<string | null>(null);
-  const connect = (name: string) => {
-    setPending(name);
-    window.setTimeout(() => {
-      setPending(null);
-      onConnected(name);
-    }, 900);
+export function ConnectWalletDialog({ open, onOpenChange, onConnected }: { open: boolean; onOpenChange: (v: boolean) => void; onConnected: (wallet: RealWalletState) => Promise<void> }) {
+  const [pending, setPending] = useState(false);
+  const [available, setAvailable] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (open) {
+      setAvailable(hasInjectedWallet());
+      setError("");
+    }
+  }, [open]);
+  const connect = async () => {
+    setPending(true);
+    setError("");
+    try {
+      await onConnected(await connectInjectedWallet());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Wallet connection failed.");
+    } finally {
+      setPending(false);
+    }
   };
+  const currentUrl = typeof window === "undefined" ? "" : window.location.href;
+  const metaMaskUrl = currentUrl ? `https://metamask.app.link/dapp/${window.location.host}` : "https://metamask.io/download/";
+  const coinbaseUrl = currentUrl
+    ? `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(currentUrl)}`
+    : "https://www.coinbase.com/wallet";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md border-border bg-popover">
         <DialogHeader>
           <DialogTitle>Connect a wallet</DialogTitle>
-          <DialogDescription>Choose a wallet to fund vaults and receive payouts on Base.</DialogDescription>
+          <DialogDescription>Connect an injected wallet to read your Base USDC and ETH balances. DepVest will not request a signature or transaction.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
-          {wallets.map((w) => (
-            <button
-              key={w.name}
-              disabled={!!pending}
-              onClick={() => connect(w.name)}
-              className="flex w-full items-center gap-3 rounded-md border border-border bg-background/40 p-3 text-left transition-colors hover:border-primary/50 disabled:opacity-60"
-            >
-              <span className="grid size-10 shrink-0 place-items-center rounded-md bg-secondary"><Wallet className="size-5 text-success" /></span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium">{w.name}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">{w.note}</span>
-              </span>
-              {pending === w.name ? (
-                <span className="font-mono text-[10px] text-success">Connecting…</span>
-              ) : w.tag ? (
-                <span className="rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[9px] text-success">{w.tag}</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
+        {available ? (
+          <Button onClick={() => void connect()} disabled={pending} className="w-full">
+            <Wallet />{pending ? "Connecting…" : "Connect injected wallet"}
+          </Button>
+        ) : (
+          <div className="space-y-3 rounded-md border border-border bg-background/40 p-4">
+            <p className="text-sm">No browser wallet detected. Open DepVest in a wallet app or install a browser wallet.</p>
+            <div className="flex flex-wrap gap-3 text-sm text-success">
+              <a href={metaMaskUrl} target="_blank" rel="noopener noreferrer">Open in MetaMask</a>
+              <a href={coinbaseUrl} target="_blank" rel="noopener noreferrer">Open in Coinbase Wallet</a>
+            </div>
+          </div>
+        )}
+        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck className="size-3" /> Secure connection · DepVest never asks for your seed phrase or private keys.</p>
       </DialogContent>
     </Dialog>
   );
 }
 
-export function WalletChip({ wallet, balance = 0, onDisconnect, onNotice }: { wallet: string; balance?: number; onDisconnect: () => void; onNotice: (m: string) => void }) {
+export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance = 0, onDisconnect, onNotice }: { wallet: string; provider: string; chainId: string | null; balance?: number; ethBalance?: number; onDisconnect: () => void; onNotice: (m: string) => void }) {
+  const onBase = chainId?.toLowerCase() === BASE_CHAIN_ID_HEX;
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button className="flex h-9 items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 font-mono text-[11px] text-success">
           <i className="size-1.5 rounded-full bg-success" />
-          <span className="hidden sm:inline">{WALLET_ADDRESS}</span>
+          <span className="hidden sm:inline">{`${wallet.slice(0, 6)}…${wallet.slice(-4)}`}</span>
           <Wallet className="size-3.5 sm:hidden" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 border-border bg-popover">
-        <Eyebrow>Connected via {wallet}</Eyebrow>
-        <p className="mt-2 font-mono text-base">{WALLET_ADDRESS}</p>
+        <Eyebrow>Connected via {provider}</Eyebrow>
+        <p className="mt-2 break-all font-mono text-xs">{wallet}</p>
         <div className="mt-3 flex gap-2">
-          <span className="rounded-full border border-digital/30 bg-digital/10 px-2 py-0.5 text-[10px] text-digital">● Base</span>
+          <span className={cn("rounded-full border px-2 py-0.5 text-[10px]", onBase ? "border-digital/30 bg-digital/10 text-digital" : "border-destructive/30 bg-destructive/10 text-destructive")}>● {onBase ? "Base" : "Wrong network"}</span>
           <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">{balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC</span>
         </div>
+        <p className="mt-2 text-[10px] text-muted-foreground">{ethBalance.toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button size="sm" variant="outline" onClick={() => onNotice("Wallet address copied")}><Copy />Copy</Button>
-          <Button size="sm" variant="outline" onClick={() => onNotice("Switched network to Ethereum")}>Switch net</Button>
+          <Button size="sm" variant="outline" onClick={() => onNotice("Switch to Base in your wallet to use Base USDC.")}>Switch net</Button>
         </div>
         <Button size="sm" variant="ghost" className="mt-2 w-full text-destructive" onClick={onDisconnect}><LogOut />Disconnect</Button>
       </PopoverContent>
@@ -264,7 +267,7 @@ export function ProfileSheet({ open, onOpenChange, wallet, referralCode, onConne
           <section className="rounded-md border border-border bg-background/40 p-4">
             <Eyebrow>Security & wallet</Eyebrow>
             <dl className="mt-3 space-y-2 text-xs">
-              <Row k="Primary wallet" v={wallet ? <span className="font-mono">{WALLET_ADDRESS}</span> : <button className="text-success" onClick={onConnect}>Connect wallet</button>} />
+              <Row k="Primary wallet" v={wallet ? <span className="font-mono">{wallet}</span> : <button className="text-success" onClick={onConnect}>Connect wallet</button>} />
               <Row k="Two-factor auth" v={<span>Off</span>} />
               <Row k="Custody" v="Regulated custodian" />
             </dl>
