@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiProvider } from "wagmi";
+import { WagmiProvider, type Config } from "wagmi";
 import {
   Outlet,
   Link,
@@ -9,11 +9,11 @@ import {
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { wagmiConfig } from "../lib/web3";
+import { loadWagmiConfig } from "../lib/web3";
 
 function NotFoundComponent() {
   return (
@@ -119,13 +119,21 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [wagmiConfig, setWagmiConfig] = useState<Config | null>(null);
+  useEffect(() => {
+    void loadWagmiConfig().then(setWagmiConfig);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WagmiProvider config={wagmiConfig}>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-      </WagmiProvider>
+      {wagmiConfig ? (
+        <WagmiProvider config={wagmiConfig}>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </WagmiProvider>
+      ) : (
+        <div className="min-h-screen bg-background" aria-busy="true" aria-label="Loading DepVest" />
+      )}
     </QueryClientProvider>
   );
 }

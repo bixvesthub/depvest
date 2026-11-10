@@ -1,5 +1,5 @@
-import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import type { ChainAdapter } from "@reown/appkit/react";
+import type { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { base, mainnet, type AppKitNetwork } from "@reown/appkit/networks";
 import { useEffect, useState } from "react";
 
@@ -8,13 +8,20 @@ const projectId =
 
 export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [base, mainnet];
 
-const wagmiAdapter = new WagmiAdapter({
-  networks: [...networks],
-  projectId,
-  ssr: true,
-});
+// The wallet libraries need browser APIs, so they load only in the browser.
+let adapterPromise: Promise<WagmiAdapter> | undefined;
+function getAdapter(): Promise<WagmiAdapter> {
+  if (!adapterPromise) {
+    adapterPromise = import("@reown/appkit-adapter-wagmi").then(
+      ({ WagmiAdapter }) => new WagmiAdapter({ networks: [...networks], projectId, ssr: true }),
+    );
+  }
+  return adapterPromise;
+}
 
-export const wagmiConfig = wagmiAdapter.wagmiConfig;
+export function loadWagmiConfig() {
+  return getAdapter().then((a) => a.wagmiConfig);
+}
 
 type Modal = {
   open: (options?: { view?: string }) => Promise<unknown>;
@@ -26,8 +33,8 @@ type Modal = {
 let modalPromise: Promise<Modal> | undefined;
 function getModal(): Promise<Modal> {
   if (!modalPromise) {
-    modalPromise = import("@reown/appkit/react").then(
-      ({ createAppKit }) =>
+    modalPromise = Promise.all([import("@reown/appkit/react"), getAdapter()]).then(
+      ([{ createAppKit }, wagmiAdapter]) =>
         createAppKit({
           // The adapter's namespace declaration conflicts with AppKit's exact-optional type.
           adapters: [wagmiAdapter as ChainAdapter],
