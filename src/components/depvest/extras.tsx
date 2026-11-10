@@ -75,6 +75,7 @@ export function ConnectWalletDialog({ open, onOpenChange, onError }: { open: boo
 
 export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance = 0, onNotice }: { wallet: string; provider: string; chainId: string | null; balance?: number; ethBalance?: number; onNotice: (m: string) => void }) {
   const { disconnectAsync } = useDisconnect();
+  const { switchChainAsync } = useSwitchChain();
   const onBase = chainId?.toLowerCase() === BASE_CHAIN_ID_HEX;
   return (
     <Popover>
@@ -94,8 +95,8 @@ export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance 
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">{ethBalance.toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <Button size="sm" variant="outline" onClick={() => onNotice("Wallet address copied")}><Copy />Copy</Button>
-          <Button size="sm" variant="outline" onClick={() => onNotice("Switch to Base in your wallet to use Base USDC.")}>Switch net</Button>
+          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(wallet).then(() => onNotice("Wallet address copied"), () => onNotice("Could not copy the address")); }}><Copy />Copy</Button>
+          <Button size="sm" variant="outline" disabled={onBase} onClick={() => void switchChainAsync({ chainId: 8453 }).then(() => onNotice("Switched to Base")).catch((error: unknown) => onNotice(`Network switch failed: ${error instanceof Error ? error.message : "Unknown wallet error"}`))}>Switch net</Button>
         </div>
         <Button size="sm" variant="ghost" className="mt-2 w-full text-destructive" onClick={() => void disconnectAsync().then(() => onNotice("Wallet disconnected")).catch((error: unknown) => onNotice(`Wallet disconnection failed: ${error instanceof Error ? error.message : "Unknown wallet error"}`))}><LogOut />Disconnect</Button>
       </PopoverContent>
