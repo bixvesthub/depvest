@@ -34,7 +34,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { BASE_CHAIN_ID_HEX } from "@/lib/wallet";
 import type { AccountPreferences, UserProfile } from "./types";
-import { useAppKit } from "@reown/appkit/react";
+import { openAppKit } from "@/lib/web3";
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{children}</span>;
@@ -53,7 +53,6 @@ function Intro({ eyebrow, title, copy }: { eyebrow: string; title: string; copy:
 /* ---------------- Connect wallet ---------------- */
 
 export function ConnectWalletDialog({ open, onOpenChange, onError }: { open: boolean; onOpenChange: (v: boolean) => void; onError: (message: string) => void }) {
-  const { open: openAppKit } = useAppKit();
   const requestedRef = useRef(false);
   useEffect(() => {
     if (!open) {
@@ -69,7 +68,7 @@ export function ConnectWalletDialog({ open, onOpenChange, onError }: { open: boo
         onOpenChange(false);
         onError(error instanceof Error ? error.message : "Wallet connection failed.");
       });
-  }, [open, openAppKit, onError, onOpenChange]);
+  }, [open, onError, onOpenChange]);
   return null;
 }
 
