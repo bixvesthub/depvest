@@ -1,4 +1,4 @@
-export const BASE_USDC_CONTRACT = "0x5Db7b10dB4827A346FaDF3FE2aa8b2c7d4a33b86";
+export const BASE_USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const BASE_CHAIN_ID_HEX = "0x2105";
 
 type WalletProviderName =

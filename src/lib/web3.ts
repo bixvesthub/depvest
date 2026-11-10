@@ -4,7 +4,7 @@ import type { ChainAdapter } from "@reown/appkit/react";
 import { base, mainnet, type AppKitNetwork } from "@reown/appkit/networks";
 
 const projectId =
-  import.meta.env["VITE_WALLETCONNECT_PROJECT_ID"] || "3a8170812b534d0ff9d794f19a901d64";
+  import.meta.env["VITE_WALLETCONNECT_PROJECT_ID"] || "8a744d2d06c2b91d43f47d8222079d07";
 
 export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [base, mainnet];
 
