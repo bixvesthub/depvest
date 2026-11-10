@@ -23,7 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useDisconnect } from "wagmi";
+import { useDisconnect, useSwitchChain } from "wagmi";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
