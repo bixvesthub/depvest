@@ -23,7 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useDisconnect } from "wagmi";
+import { useDisconnect, useSwitchChain } from "wagmi";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { BASE_CHAIN_ID_HEX } from "@/lib/wallet";
 import type { AccountPreferences, UserProfile } from "./types";
-import { useAppKit } from "@reown/appkit/react";
+import { openAppKit } from "@/lib/web3";
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{children}</span>;
@@ -53,7 +53,6 @@ function Intro({ eyebrow, title, copy }: { eyebrow: string; title: string; copy:
 /* ---------------- Connect wallet ---------------- */
 
 export function ConnectWalletDialog({ open, onOpenChange, onError }: { open: boolean; onOpenChange: (v: boolean) => void; onError: (message: string) => void }) {
-  const { open: openAppKit } = useAppKit();
   const requestedRef = useRef(false);
   useEffect(() => {
     if (!open) {
@@ -69,12 +68,13 @@ export function ConnectWalletDialog({ open, onOpenChange, onError }: { open: boo
         onOpenChange(false);
         onError(error instanceof Error ? error.message : "Wallet connection failed.");
       });
-  }, [open, openAppKit, onError, onOpenChange]);
+  }, [open, onError, onOpenChange]);
   return null;
 }
 
 export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance = 0, onNotice }: { wallet: string; provider: string; chainId: string | null; balance?: number; ethBalance?: number; onNotice: (m: string) => void }) {
   const { disconnectAsync } = useDisconnect();
+  const { switchChainAsync } = useSwitchChain();
   const onBase = chainId?.toLowerCase() === BASE_CHAIN_ID_HEX;
   return (
     <Popover>
@@ -94,8 +94,8 @@ export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance 
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">{ethBalance.toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <Button size="sm" variant="outline" onClick={() => onNotice("Wallet address copied")}><Copy />Copy</Button>
-          <Button size="sm" variant="outline" onClick={() => onNotice("Switch to Base in your wallet to use Base USDC.")}>Switch net</Button>
+          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(wallet).then(() => onNotice("Wallet address copied"), () => onNotice("Could not copy the address")); }}><Copy />Copy</Button>
+          <Button size="sm" variant="outline" disabled={onBase} onClick={() => void switchChainAsync({ chainId: 8453 }).then(() => onNotice("Switched to Base")).catch((error: unknown) => onNotice(`Network switch failed: ${error instanceof Error ? error.message : "Unknown wallet error"}`))}>Switch net</Button>
         </div>
         <Button size="sm" variant="ghost" className="mt-2 w-full text-destructive" onClick={() => void disconnectAsync().then(() => onNotice("Wallet disconnected")).catch((error: unknown) => onNotice(`Wallet disconnection failed: ${error instanceof Error ? error.message : "Unknown wallet error"}`))}><LogOut />Disconnect</Button>
       </PopoverContent>
