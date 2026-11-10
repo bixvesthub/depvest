@@ -1,4 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { base } from "@reown/appkit/networks";
+import { useAppKitState } from "@reown/appkit/react";
+import { useAccount, useBalance, useDisconnect, useReadContract } from "wagmi";
+import { erc20Abi, formatUnits } from "viem";
 import {
   Activity,
   User,
@@ -63,7 +67,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { createReferralCode, qualifiesReferral } from "@/lib/referral";
-import { BASE_CHAIN_ID_HEX, isWalletAddress, readInjectedWalletState, subscribeWalletEvents, type RealWalletState } from "@/lib/wallet";
+import { BASE_CHAIN_ID_HEX, BASE_USDC_CONTRACT, type RealWalletState } from "@/lib/wallet";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -266,6 +270,18 @@ const makeTransactionHash = () => {
 const amountFromValue = (value: string) => Number(value.replace(/[^0-9.-]/g, "")) || 0;
 
 function DepVestApp() {
+  const account = useAccount();
+  const baseUsdc = useReadContract({
+    address: BASE_USDC_CONTRACT,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: account.address ? [account.address] : undefined,
+    chainId: base.id,
+    query: { enabled: Boolean(account.address) },
+  });
+  const nativeEth = useBalance({ address: account.address, chainId: account.chainId });
+  const { disconnectAsync } = useDisconnect();
+  const appKitState = useAppKitState();
   const [isDark, setIsDark] = useState(true);
   const [view, setView] = useState<View>("Portfolio");
   const [notice, setNotice] = useState("");
@@ -313,10 +329,10 @@ function DepVestApp() {
   const [settlement, setSettlement] = useState<SettlementProgress | null>(null);
   const settlementInFlightRef = useRef<string | null>(null);
   const ledgerReferencesRef = useRef<Set<string>>(new Set());
+  const linkedWalletRef = useRef<string | null>(null);
+  const appKitWasOpenRef = useRef(false);
   const [wallet, setWallet] = useState<string | null>(null);
   const [walletProvider, setWalletProvider] = useState<RealWalletState["provider"] | null>(null);
-  const [walletBalanceState, setWalletBalanceState] = useState(0);
-  const [ethBalance, setEthBalance] = useState(0);
   const [walletChainId, setWalletChainId] = useState<string | null>(null);
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [pendingFlow, setPendingFlow] = useState<Flow>(null);
@@ -363,7 +379,6 @@ function DepVestApp() {
           setLedger(restored);
           const st = saved.state;
           setSettlementEvents(st.settlementEvents ?? []);
-          setWallet(st.wallet && isWalletAddress(st.wallet) ? st.wallet : null);
           if (st.dvtBalance) setDvtBalance((current) => ({ ...current, ...st.dvtBalance }));
           setPendingReferralDvt(st.pendingReferralDvt ?? 0);
           setReferralEarnings(st.referralEarnings ?? 0);
@@ -404,58 +419,18 @@ function DepVestApp() {
   const showNoticeRef = useRef(showNotice);
   showNoticeRef.current = showNotice;
   useEffect(() => {
-    let active = true;
-    let latestRequest = 0;
-    const refresh = async (address: string | null) => {
-      const requestId = ++latestRequest;
-      if (!address) {
-        setWallet(null);
-        setWalletProvider(null);
-        setWalletBalanceState(0);
-        setEthBalance(0);
-        setWalletChainId(null);
-        return;
-      }
-      try {
-        const state = await readInjectedWalletState(address);
-        if (!active || requestId !== latestRequest) return;
-        if (!state) {
-          setWallet(null);
-          setWalletProvider(null);
-          setWalletBalanceState(0);
-          setEthBalance(0);
-          setWalletChainId(null);
-          return;
-        }
-        setWallet(state.address);
-        setWalletProvider(state.provider);
-        setWalletBalanceState(state.usdcBalance);
-        setEthBalance(state.ethBalance);
-        setWalletChainId(state.chainId);
-        if (state.balanceWarning) showNoticeRef.current(state.balanceWarning);
-      } catch (error) {
-        if (active && requestId === latestRequest) {
-          showNoticeRef.current(error instanceof Error ? error.message : "Unable to refresh wallet balances.");
-        }
-      }
-    };
-    if (wallet) {
-      void readInjectedWalletState().then((state) => {
-        if (!active) return;
-        void refresh(state?.address ?? null);
-      }).catch((error: unknown) => {
-        if (active) showNoticeRef.current(error instanceof Error ? error.message : "Unable to refresh wallet connection.");
-      });
+    if (baseUsdc.error) showNoticeRef.current(`Base USDC balance could not be read: ${baseUsdc.error.message}`);
+    if (nativeEth.error) showNoticeRef.current(`ETH balance could not be read: ${nativeEth.error.message}`);
+  }, [baseUsdc.error, nativeEth.error]);
+  useEffect(() => {
+    if (appKitState.open) {
+      appKitWasOpenRef.current = true;
+      return;
     }
-    const unsubscribe = subscribeWalletEvents(
-      (accounts) => void refresh(accounts[0] ?? null),
-      () => void refresh(wallet),
-    );
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [wallet]);
+    if (!appKitWasOpenRef.current) return;
+    appKitWasOpenRef.current = false;
+    if (!account.isConnected && account.status === "disconnected") setPendingFlow(null);
+  }, [account.isConnected, account.status, appKitState.open]);
   const go = (v: View) => {
     setView(v);
     setMoreOpen(false);
@@ -560,7 +535,11 @@ function DepVestApp() {
   const digitalHoldings = cents(settledEntries.reduce((total, row) => total + row.balanceDeltas.digital, 0));
   const investedCapital = cents(treasuryHoldings + cloudHoldings + digitalHoldings);
   const portfolioTotal = cents(unallocatedCash + investedCapital);
-  const walletBalance = wallet ? walletBalanceState : 0;
+  const walletBalance = wallet ? Number(formatUnits(baseUsdc.data ?? 0n, 6)) : 0;
+  const ethBalance =
+    wallet && nativeEth.data
+      ? Number(formatUnits(nativeEth.data.value, nativeEth.data.decimals))
+      : 0;
   const pendingWithdrawals = ledger
     .filter((row) => row.transactionType === "withdrawal" && row.status === "pending" && !settledReferences.has(row.reference))
     .reduce((total, row) => total + Math.max(0, -row.balanceDeltas.unallocated), 0);
@@ -640,13 +619,12 @@ function DepVestApp() {
     requireWallet(name ? { kind: "deposit", vault: name } : { kind: "deposit" });
   };
   const disconnect = () => {
-    setWallet(null);
-    setWalletProvider(null);
-    setWalletBalanceState(0);
-    setEthBalance(0);
-    setWalletChainId(null);
-    setProfileOpen(false);
-    showNotice("Wallet disconnected");
+    void disconnectAsync()
+      .then(() => {
+        setProfileOpen(false);
+        showNotice("Wallet disconnected");
+      })
+      .catch((error: unknown) => showNotice(error instanceof Error ? error.message : "Wallet disconnection failed."));
   };
   const copyToClipboard = async (value: string, label: string) => {
     try {
@@ -758,11 +736,6 @@ function DepVestApp() {
     hydratedRef.current = false;
     setProfile(GUEST_PROFILE);
     setPreferences(DEFAULT_PREFERENCES);
-    setWallet(null);
-    setWalletProvider(null);
-    setWalletBalanceState(0);
-    setEthBalance(0);
-    setWalletChainId(null);
     setLedger([]);
     setSettlementEvents([]);
     setSettlement(null);
@@ -792,6 +765,50 @@ function DepVestApp() {
       ],
     }));
   };
+
+  useEffect(() => {
+    if (account.status === "disconnected") {
+      setWallet(null);
+      setWalletProvider(null);
+      setWalletChainId(null);
+      linkedWalletRef.current = null;
+      return;
+    }
+    if (!account.isConnected || !account.address) return;
+
+    const connectorName = account.connector?.name ?? "";
+    const provider: RealWalletState["provider"] =
+      connectorName === "MetaMask"
+        ? "MetaMask"
+        : connectorName === "Coinbase Wallet"
+          ? "Coinbase"
+          : connectorName === "Ledger Live"
+            ? "Ledger Live"
+            : connectorName === "WalletConnect"
+              ? "WalletConnect"
+              : connectorName === "Rainbow"
+                ? "Rainbow"
+                : connectorName === "Trust Wallet"
+                  ? "Trust Wallet"
+                  : "Injected wallet";
+
+    setWallet(account.address);
+    setWalletProvider(provider);
+    setWalletChainId(account.chainId ? `0x${account.chainId.toString(16)}` : null);
+    setConnectOpen(false);
+    if (pendingFlow) {
+      setFlow(pendingFlow);
+      setPendingFlow(null);
+    }
+    const linkKey = `${profile.id}:${account.address}`;
+    if (linkedWalletRef.current !== linkKey) {
+      linkedWalletRef.current = linkKey;
+      void handleLinkWallet(account.address, provider).catch((error: unknown) => {
+        linkedWalletRef.current = null;
+        showNoticeRef.current(error instanceof Error ? error.message : "Unable to link this wallet.");
+      });
+    }
+  }, [account.address, account.chainId, account.connector?.name, account.isConnected, account.status, pendingFlow, profile.id, profile.isAuthenticated]);
 
   const handleUpdateProfile = async (displayName: string, nextPreferences: AccountPreferences): Promise<void> => {
     await saveProfile(profile.id, displayName, nextPreferences);
@@ -833,7 +850,6 @@ function DepVestApp() {
         walletBalance={walletBalance}
         ethBalance={ethBalance}
         onConnect={() => setConnectOpen(true)}
-        onDisconnect={disconnect}
         onProfile={() => setProfileOpen(true)}
         onNotice={showNotice}
         isDark={isDark}
@@ -956,20 +972,14 @@ function DepVestApp() {
         showNotice(`+${reward.toLocaleString("en-US")} DVT added to pending session credits`);
       }} />
       <VaultDetailDialog vault={flow?.kind === "vault" ? (vaults.map((v) => withTerms(v, terms, alloc, portfolioTotal, { Treasury: treasuryHoldings, Cloud: cloudHoldings, Digital: digitalHoldings })).find((v) => v.name === flow.name) ?? null) : null} unallocatedCash={availableCash} onClose={() => setFlow(null)} onAllocate={(name) => setAction(`Allocate Cash: ${name}`)} onDeposit={(name) => requireWallet({ kind: "deposit", vault: name })} />
-      <ConnectWalletDialog open={connectOpen} onOpenChange={(open) => { setConnectOpen(open); if (!open) setPendingFlow(null); }} onConnected={async (state) => {
-        await handleLinkWallet(state.address, state.provider);
-        setWallet(state.address);
-        setWalletProvider(state.provider);
-        setWalletBalanceState(state.usdcBalance);
-        setEthBalance(state.ethBalance);
-        setWalletChainId(state.chainId);
-        setConnectOpen(false);
-        const requestedFlow = pendingFlow;
-        setPendingFlow(null);
-        if (requestedFlow) setFlow(requestedFlow);
-        const networkStatus = state.chainId.toLowerCase() === BASE_CHAIN_ID_HEX ? "on Base" : "on another network; switch to Base to use USDC";
-        showNotice(`Connected ${state.address.slice(0, 6)}…${state.address.slice(-4)} ${networkStatus}${state.balanceWarning ? `. ${state.balanceWarning}` : ""}`);
-      }} />
+      <ConnectWalletDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        onError={(message) => {
+          setPendingFlow(null);
+          showNotice(message);
+        }}
+      />
       <ProfileSheet
         open={profileOpen}
         onOpenChange={setProfileOpen}
@@ -1077,7 +1087,7 @@ function LandingFeature({ icon, title, copy }: { icon: ReactNode; title: string;
   );
 }
 
-function Header({ view, onView, wallet, walletProvider, walletChainId, walletBalance, ethBalance, onConnect, onDisconnect, onProfile, onNotice, onMore, isDark, onToggleTheme, profile }: {
+function Header({ view, onView, wallet, walletProvider, walletChainId, walletBalance, ethBalance, onConnect, onProfile, onNotice, onMore, isDark, onToggleTheme, profile }: {
   walletBalance: number;
   ethBalance: number;
   walletProvider: RealWalletState["provider"] | null;
@@ -1089,7 +1099,6 @@ function Header({ view, onView, wallet, walletProvider, walletChainId, walletBal
   onView: (view: View) => void;
   wallet: string | null;
   onConnect: () => void;
-  onDisconnect: () => void;
   onProfile: () => void;
   onNotice: (m: string) => void;
   profile: UserProfile;
@@ -1110,7 +1119,7 @@ function Header({ view, onView, wallet, walletProvider, walletChainId, walletBal
             {moreItems.map((m) => <button key={m.label} onClick={() => onView(m.label)} className={cn("rounded-full px-3 py-2 text-xs transition-colors", view === m.label ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>{m.label}</button>)}
           </div>
           {wallet ? (
-            <WalletChip wallet={wallet} provider={walletProvider ?? "Injected wallet"} chainId={walletChainId} balance={walletBalance} ethBalance={ethBalance} onDisconnect={onDisconnect} onNotice={onNotice} />
+            <WalletChip wallet={wallet} provider={walletProvider ?? "Injected wallet"} chainId={walletChainId} balance={walletBalance} ethBalance={ethBalance} onNotice={onNotice} />
           ) : (
             <Button onClick={onConnect} className="h-9 shrink-0 rounded-full bg-success px-3 text-primary-foreground hover:bg-success/90 sm:px-4">
               <WalletCards /><span className="hidden sm:inline">Connect Wallet</span><span className="sm:hidden">Connect</span>

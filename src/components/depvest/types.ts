@@ -16,7 +16,7 @@ export interface AccountPreferences {
 
 export interface LinkedWallet {
   address: string;
-  provider: "MetaMask" | "Coinbase" | "Ledger" | "Injected wallet";
+  provider: "MetaMask" | "Coinbase" | "Ledger" | "Ledger Live" | "WalletConnect" | "Rainbow" | "Trust Wallet" | "Injected wallet";
   isPrimary: boolean;
   verifiedAt: string;
 }

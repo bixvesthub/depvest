@@ -22,7 +22,8 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useDisconnect } from "wagmi";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -31,8 +32,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { connectInjectedWallet, hasInjectedWallet, BASE_CHAIN_ID_HEX, type RealWalletState } from "@/lib/wallet";
+import { BASE_CHAIN_ID_HEX } from "@/lib/wallet";
 import type { AccountPreferences, UserProfile } from "./types";
+import { useAppKit } from "@reown/appkit/react";
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{children}</span>;
@@ -50,60 +52,29 @@ function Intro({ eyebrow, title, copy }: { eyebrow: string; title: string; copy:
 
 /* ---------------- Connect wallet ---------------- */
 
-export function ConnectWalletDialog({ open, onOpenChange, onConnected }: { open: boolean; onOpenChange: (v: boolean) => void; onConnected: (wallet: RealWalletState) => Promise<void> }) {
-  const [pending, setPending] = useState(false);
-  const [available, setAvailable] = useState(false);
-  const [error, setError] = useState("");
+export function ConnectWalletDialog({ open, onOpenChange, onError }: { open: boolean; onOpenChange: (v: boolean) => void; onError: (message: string) => void }) {
+  const { open: openAppKit } = useAppKit();
+  const requestedRef = useRef(false);
   useEffect(() => {
-    if (open) {
-      setAvailable(hasInjectedWallet());
-      setError("");
+    if (!open) {
+      requestedRef.current = false;
+      return;
     }
-  }, [open]);
-  const connect = async () => {
-    setPending(true);
-    setError("");
-    try {
-      await onConnected(await connectInjectedWallet());
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Wallet connection failed.");
-    } finally {
-      setPending(false);
-    }
-  };
-  const currentUrl = typeof window === "undefined" ? "" : window.location.href;
-  const metaMaskUrl = currentUrl ? `https://metamask.app.link/dapp/${window.location.host}` : "https://metamask.io/download/";
-  const coinbaseUrl = currentUrl
-    ? `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(currentUrl)}`
-    : "https://www.coinbase.com/wallet";
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md border-border bg-popover">
-        <DialogHeader>
-          <DialogTitle>Connect a wallet</DialogTitle>
-          <DialogDescription>Connect an injected wallet to read your Base USDC and ETH balances. DepVest will not request a signature or transaction.</DialogDescription>
-        </DialogHeader>
-        {available ? (
-          <Button onClick={() => void connect()} disabled={pending} className="w-full">
-            <Wallet />{pending ? "Connecting…" : "Connect injected wallet"}
-          </Button>
-        ) : (
-          <div className="space-y-3 rounded-md border border-border bg-background/40 p-4">
-            <p className="text-sm">No browser wallet detected. Open DepVest in a wallet app or install a browser wallet.</p>
-            <div className="flex flex-wrap gap-3 text-sm text-success">
-              <a href={metaMaskUrl} target="_blank" rel="noopener noreferrer">Open in MetaMask</a>
-              <a href={coinbaseUrl} target="_blank" rel="noopener noreferrer">Open in Coinbase Wallet</a>
-            </div>
-          </div>
-        )}
-        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-        <p className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck className="size-3" /> Secure connection · DepVest never asks for your seed phrase or private keys.</p>
-      </DialogContent>
-    </Dialog>
-  );
+    if (requestedRef.current) return;
+    requestedRef.current = true;
+    void openAppKit({ view: "Connect" })
+      .then(() => onOpenChange(false))
+      .catch((error: unknown) => {
+        requestedRef.current = false;
+        onOpenChange(false);
+        onError(error instanceof Error ? error.message : "Wallet connection failed.");
+      });
+  }, [open, openAppKit, onError, onOpenChange]);
+  return null;
 }
 
-export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance = 0, onDisconnect, onNotice }: { wallet: string; provider: string; chainId: string | null; balance?: number; ethBalance?: number; onDisconnect: () => void; onNotice: (m: string) => void }) {
+export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance = 0, onNotice }: { wallet: string; provider: string; chainId: string | null; balance?: number; ethBalance?: number; onNotice: (m: string) => void }) {
+  const { disconnectAsync } = useDisconnect();
   const onBase = chainId?.toLowerCase() === BASE_CHAIN_ID_HEX;
   return (
     <Popover>
@@ -126,7 +97,7 @@ export function WalletChip({ wallet, provider, chainId, balance = 0, ethBalance 
           <Button size="sm" variant="outline" onClick={() => onNotice("Wallet address copied")}><Copy />Copy</Button>
           <Button size="sm" variant="outline" onClick={() => onNotice("Switch to Base in your wallet to use Base USDC.")}>Switch net</Button>
         </div>
-        <Button size="sm" variant="ghost" className="mt-2 w-full text-destructive" onClick={onDisconnect}><LogOut />Disconnect</Button>
+        <Button size="sm" variant="ghost" className="mt-2 w-full text-destructive" onClick={() => void disconnectAsync().then(() => onNotice("Wallet disconnected")).catch((error: unknown) => onNotice(`Wallet disconnection failed: ${error instanceof Error ? error.message : "Unknown wallet error"}`))}><LogOut />Disconnect</Button>
       </PopoverContent>
     </Popover>
   );

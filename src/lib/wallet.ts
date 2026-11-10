@@ -1,7 +1,15 @@
-export const BASE_USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+export const BASE_USDC_CONTRACT = "0x5Db7b10dB4827A346FaDF3FE2aa8b2c7d4a33b86";
 export const BASE_CHAIN_ID_HEX = "0x2105";
 
-type WalletProviderName = "MetaMask" | "Coinbase" | "Injected wallet";
+type WalletProviderName =
+  | "MetaMask"
+  | "Coinbase"
+  | "Ledger"
+  | "Ledger Live"
+  | "WalletConnect"
+  | "Rainbow"
+  | "Trust Wallet"
+  | "Injected wallet";
 
 interface InjectedProvider {
   isMetaMask?: boolean;
@@ -9,12 +17,6 @@ interface InjectedProvider {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
   on(event: "accountsChanged" | "chainChanged", listener: (value: unknown) => void): void;
   removeListener?(event: "accountsChanged" | "chainChanged", listener: (value: unknown) => void): void;
-}
-
-declare global {
-  interface Window {
-    ethereum?: InjectedProvider;
-  }
 }
 
 export interface RealWalletState {
@@ -27,7 +29,19 @@ export interface RealWalletState {
 }
 
 function getProvider(): InjectedProvider | undefined {
-  return typeof window === "undefined" ? undefined : window.ethereum;
+  if (typeof window === "undefined") return undefined;
+  const provider: unknown = Reflect.get(window, "ethereum");
+  if (
+    typeof provider !== "object" ||
+    provider === null ||
+    !("request" in provider) ||
+    typeof provider.request !== "function" ||
+    !("on" in provider) ||
+    typeof provider.on !== "function"
+  ) {
+    return undefined;
+  }
+  return provider as InjectedProvider;
 }
 
 export function hasInjectedWallet(): boolean {
