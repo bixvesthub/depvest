@@ -1,5 +1,4 @@
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
-import { createAppKit } from "@reown/appkit/react";
 import type { ChainAdapter } from "@reown/appkit/react";
 import { base, mainnet, type AppKitNetwork } from "@reown/appkit/networks";
 
@@ -16,7 +15,7 @@ const wagmiAdapter = new WagmiAdapter({
 
 export const wagmiConfig = wagmiAdapter.wagmiConfig;
 
-if (typeof window !== "undefined") createAppKit({
+if (typeof window !== "undefined") void import("@reown/appkit/react").then(({ createAppKit }) => createAppKit({
   // The adapter's namespace declaration conflicts with AppKit's exact-optional type.
   adapters: [wagmiAdapter as ChainAdapter],
   networks,
@@ -37,4 +36,4 @@ if (typeof window !== "undefined") createAppKit({
     "--apkt-accent": "#34d399",
     "--w3m-accent": "#34d399",
   },
-});
+}));
