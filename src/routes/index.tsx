@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { base } from "@reown/appkit/networks";
-import { useAppKitState } from "@reown/appkit/react";
+import { useAppKitOpen } from "@/lib/web3";
 import { useAccount, useBalance, useDisconnect, useReadContract } from "wagmi";
 import { erc20Abi, formatUnits } from "viem";
 import {
@@ -70,7 +70,6 @@ import { createReferralCode, qualifiesReferral } from "@/lib/referral";
 import { BASE_CHAIN_ID_HEX, BASE_USDC_CONTRACT, type RealWalletState } from "@/lib/wallet";
 
 export const Route = createFileRoute("/")({
-  ssr: false,
   head: () => ({
     meta: [
       { title: "DepVest — Multi-Asset Hub" },
@@ -282,7 +281,7 @@ function DepVestApp() {
   });
   const nativeEth = useBalance({ address: account.address, chainId: account.chainId });
   const { disconnectAsync } = useDisconnect();
-  const appKitState = useAppKitState();
+  const appKitOpen = useAppKitOpen();
   const [isDark, setIsDark] = useState(true);
   const [view, setView] = useState<View>("Portfolio");
   const [notice, setNotice] = useState("");
@@ -424,14 +423,14 @@ function DepVestApp() {
     if (nativeEth.error) showNoticeRef.current(`ETH balance could not be read: ${nativeEth.error.message}`);
   }, [baseUsdc.error, nativeEth.error]);
   useEffect(() => {
-    if (appKitState.open) {
+    if (appKitOpen) {
       appKitWasOpenRef.current = true;
       return;
     }
     if (!appKitWasOpenRef.current) return;
     appKitWasOpenRef.current = false;
     if (!account.isConnected && account.status === "disconnected") setPendingFlow(null);
-  }, [account.isConnected, account.status, appKitState.open]);
+  }, [account.isConnected, account.status, appKitOpen]);
   const go = (v: View) => {
     setView(v);
     setMoreOpen(false);
