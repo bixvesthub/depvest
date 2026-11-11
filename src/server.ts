@@ -25,7 +25,17 @@ if (typeof g["customElements"] === "undefined") {
     whenDefined: () => Promise.resolve(),
   };
 }
+if (typeof g["document"] === "undefined") {
+  const noop: unknown = new Proxy(function () {}, {
+    get: (_t, k) => (k === Symbol.toPrimitive ? () => "" : noop),
+    apply: () => noop,
+    construct: () => noop as object,
+  });
+  g["document"] = noop;
 }
+}
+
+installDomShim();
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
