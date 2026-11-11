@@ -20,7 +20,7 @@ function getAdapter(): Promise<WagmiAdapter> {
 }
 
 export function loadWagmiConfig() {
-  return getAdapter().then((a) => a.wagmiConfig);
+  return Promise.all([getAdapter(), getModal()]).then(([a]) => a.wagmiConfig);
 }
 
 type Modal = {
