@@ -17,6 +17,16 @@ if (typeof g["HTMLElement"] === "undefined") {
   g["Element"] ??= ShimElement;
   g["Node"] ??= ShimElement;
 }
+for (const name of ["CSSStyleSheet", "ShadowRoot", "Document", "Event", "CustomEvent", "MutationObserver", "ResizeObserver", "IntersectionObserver"]) {
+  if (typeof g[name] === "undefined") {
+    g[name] = class {
+      replaceSync() {}
+      replace() { return Promise.resolve(this); }
+      observe() {}
+      disconnect() {}
+    };
+  }
+}
 if (typeof g["customElements"] === "undefined") {
   const registry = new Map<string, unknown>();
   g["customElements"] = {
@@ -25,7 +35,17 @@ if (typeof g["customElements"] === "undefined") {
     whenDefined: () => Promise.resolve(),
   };
 }
+if (typeof g["document"] === "undefined") {
+  const noop: unknown = new Proxy(function () {}, {
+    get: (_t, k) => (k === Symbol.toPrimitive ? () => "" : noop),
+    apply: () => noop,
+    construct: () => noop as object,
+  });
+  g["document"] = noop;
 }
+}
+
+installDomShim();
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
